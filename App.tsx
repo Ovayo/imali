@@ -108,10 +108,17 @@ const App: React.FC = () => {
   const [isChatTyping, setIsChatTyping] = useState(false);
 
   const borrowers = useMemo(() => {
-    const map = new Map<string, { idNumber: string, name: string, address: string, phone: string, loans: Loan[] }>();
+    const map = new Map<string, { idNumber: string, name: string, email: string, address: string, phone: string, loans: Loan[] }>();
     loans.forEach(loan => {
       if (!map.has(loan.idNumber)) {
-        map.set(loan.idNumber, { idNumber: loan.idNumber, name: loan.borrowerName, address: loan.physicalAddress, phone: loan.borrowerNumber, loans: [] });
+        map.set(loan.idNumber, { 
+          idNumber: loan.idNumber, 
+          name: loan.borrowerName, 
+          email: loan.email || 'no-email@example.com',
+          address: loan.physicalAddress, 
+          phone: loan.borrowerNumber, 
+          loans: [] 
+        });
       }
       map.get(loan.idNumber)!.loans.push(loan);
     });
@@ -226,150 +233,7 @@ const App: React.FC = () => {
   }, [settings]);
 
   // ---------------------------------------------------------------------------
-  // RENDER: BORROWER PORTAL
-  // ---------------------------------------------------------------------------
-
-  if (userRole === UserRole.BORROWER) {
-    return (
-      <Layout
-        activeTab={activeTab} setActiveTab={setActiveTab}
-        language={language} setLanguage={setLanguage}
-        userRole={userRole} toggleRole={() => setUserRole(UserRole.LENDER)}
-      >
-        <div className="max-w-5xl mx-auto space-y-10 animate-in fade-in duration-500 pb-20">
-          {/* Borrower Hero Section */}
-          <div className="bg-white rounded-[3.5rem] p-12 border border-gray-100 shadow-xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 opacity-5 text-indigo-600"><Sparkles size={160} /></div>
-            <div className="relative z-10 flex flex-col md:flex-row items-center gap-12">
-              <div className="flex-1 space-y-6">
-                <h2 className="text-5xl font-black tracking-tighter text-gray-900 leading-none">Welcome to the Borrower Portal</h2>
-                <p className="text-lg text-gray-500 font-medium">Manage your loans, track payments, or apply for new financial support in a few simple steps.</p>
-                <div className="flex gap-4 pt-4">
-                   <button 
-                     onClick={() => setBorrowerActiveView('track')}
-                     className={`px-8 py-4 rounded-3xl font-black uppercase text-xs tracking-widest transition-all flex items-center gap-2 ${borrowerActiveView === 'track' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                   >
-                     <Search size={18} /> Track My Loan
-                   </button>
-                   <button 
-                     onClick={() => setBorrowerActiveView('apply')}
-                     className={`px-8 py-4 rounded-3xl font-black uppercase text-xs tracking-widest transition-all flex items-center gap-2 ${borrowerActiveView === 'apply' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                   >
-                     <ClipboardList size={18} /> Apply for Loan
-                   </button>
-                </div>
-              </div>
-              <div className="w-full md:w-80 h-80 bg-indigo-50 rounded-[3rem] border-2 border-dashed border-indigo-200 flex items-center justify-center p-8 relative overflow-hidden">
-                <div className="absolute inset-0 xhosa-pattern opacity-10" />
-                <div className="text-center relative z-10">
-                  <Coins size={64} className="text-indigo-400 mx-auto mb-4" />
-                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Village Lending Motif</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* View Content */}
-          {borrowerActiveView === 'track' ? (
-            <div className="space-y-8">
-              <div className="bg-[#1a1a1a] p-10 rounded-[3rem] text-white shadow-2xl space-y-6 relative overflow-hidden">
-                <div className="absolute inset-0 xhosa-pattern opacity-5 rotate-12" />
-                <h3 className="text-xl font-black uppercase tracking-widest relative z-10">Search My Records</h3>
-                <div className="flex flex-col md:flex-row gap-4 relative z-10">
-                  <input 
-                    value={borrowerSearchId}
-                    onChange={(e) => setBorrowerSearchId(e.target.value)}
-                    placeholder="Enter ID Number or Mobile..."
-                    className="flex-1 px-8 py-5 bg-white/10 border border-white/20 rounded-3xl text-white font-medium focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
-                  />
-                  <button onClick={handleSearchMyLoans} className="px-10 py-5 bg-white text-gray-900 rounded-3xl font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">Find My Loan</button>
-                </div>
-              </div>
-
-              {hasSearchedMyLoans && (
-                <div className="animate-in slide-in-from-bottom-8 duration-500 space-y-6">
-                  {myLoans.length > 0 ? (
-                    myLoans.map(loan => (
-                      <div key={loan.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-8 group hover:border-indigo-100 transition-all">
-                        <div className="flex items-center gap-8">
-                           <div className="w-16 h-16 rounded-[1.5rem] bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100 shadow-sm">
-                              <StatusDot status={loan.status} />
-                           </div>
-                           <div>
-                              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{loan.id}</p>
-                              <h4 className="text-2xl font-black text-gray-900 leading-tight">R {loan.amountLoaned.toLocaleString()}</h4>
-                              <p className="text-xs text-gray-400 font-bold uppercase tracking-tight">Due on {loan.dueDate}</p>
-                           </div>
-                        </div>
-                        <div className="text-center md:text-right space-y-1">
-                           <p className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border ${loan.status === RepaymentStatus.PAID ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
-                              {loan.status}
-                           </p>
-                           <p className="text-xs text-gray-400 font-black uppercase tracking-widest pt-2">Total Balance: R {(loan.totalRepayment + calculatePenaltyDetails(loan).penalty).toLocaleString()}</p>
-                        </div>
-                        <button onClick={() => setSelectedLoan(loan)} className="p-5 bg-gray-50 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-[1.5rem] border border-gray-100 transition-all">
-                           <Eye size={24} />
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="bg-white p-24 rounded-[3.5rem] border-2 border-dashed border-gray-100 text-center text-gray-300">
-                      <AlertCircle size={64} className="mx-auto mb-6 opacity-20" />
-                      <p className="text-xl font-black uppercase tracking-widest">No matching records found.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="bg-white p-12 rounded-[3.5rem] border border-gray-100 shadow-sm animate-in zoom-in-95 duration-500">
-              <h3 className="text-3xl font-black text-gray-900 tracking-tighter mb-8 uppercase">Loan Application</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                 <div className="space-y-8">
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Full Legal Name</label>
-                       <input className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl text-sm font-medium focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner" placeholder="As per SA ID Document" />
-                    </div>
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">ID Number</label>
-                       <input className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl text-sm font-medium focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner" placeholder="13 Digit National ID" />
-                    </div>
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Loan Amount (R)</label>
-                       <select className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl text-sm font-medium focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner appearance-none">
-                          <option>R 500</option>
-                          <option>R 1,000</option>
-                          <option>R 2,500</option>
-                          <option>R 5,000</option>
-                       </select>
-                    </div>
-                 </div>
-                 <div className="space-y-8">
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Purpose</label>
-                       <textarea className="w-full h-[120px] px-8 py-5 bg-gray-50 border-none rounded-3xl text-sm font-medium focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner resize-none" placeholder="What will you use the funds for?" />
-                    </div>
-                    <div className="p-8 bg-indigo-50/50 rounded-3xl border border-indigo-100/50 space-y-4">
-                       <div className="flex justify-between items-center"><span className="text-xs font-bold text-gray-500 uppercase">Estimated Repayment</span><span className="font-black text-indigo-600">Calculated on Approval</span></div>
-                       <p className="text-[10px] text-indigo-400 font-bold leading-relaxed">By submitting, you consent to a credit check and agree to our community lending terms.</p>
-                    </div>
-                 </div>
-              </div>
-              <div className="mt-12">
-                 <button className="w-full py-6 bg-[#1a1a1a] text-white rounded-[2rem] font-black uppercase text-sm tracking-[0.2em] shadow-2xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-4">
-                   <Send size={20} /> Submit Application
-                 </button>
-              </div>
-            </div>
-          )}
-        </div>
-        {selectedLoan && <LoanDetailModal loan={selectedLoan} onClose={() => setSelectedLoan(null)} onPay={handleMarkAsPaid} onMarkPending={handleMarkAsPending} calcPenalty={calculatePenaltyDetails} />}
-      </Layout>
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // RENDER: LENDER PAGE (LEDGER / DASHBOARD)
+  // RENDER: LENDER PAGE (CRM)
   // ---------------------------------------------------------------------------
 
   return (
@@ -424,7 +288,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Lender Page: Ledger (Loans Table with Required Columns) */}
+        {/* Ledger Tab */}
         {activeTab === 'loans' && (
           <div className="bg-white rounded-[3.5rem] border border-gray-100 shadow-xl overflow-hidden relative flex flex-col h-[75vh]">
              <div className="p-10 border-b border-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-8 relative z-10 shrink-0">
@@ -449,18 +313,7 @@ const App: React.FC = () => {
                          <th className="px-10 py-8">Borrower Name</th>
                          <th className="px-10 py-8">Borrower Number</th>
                          <th className="px-10 py-8">Amount Loaned</th>
-                         <th className="px-10 py-8">
-                            <div className="flex items-center gap-2">
-                               Total Amount Due
-                               <div className="group/total-info relative cursor-help">
-                                  <Info size={14} className="text-gray-400 hover:text-indigo-600 transition-colors" />
-                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover/total-info:block w-48 p-4 bg-[#1a1a1a] text-white text-[10px] font-medium leading-relaxed rounded-2xl shadow-2xl z-50">
-                                     <p className="font-black uppercase tracking-widest text-indigo-400 mb-1">Calculation Motif</p>
-                                     Principal + Interest + (Penalty % x Principal per week overdue).
-                                  </div>
-                               </div>
-                            </div>
-                         </th>
+                         <th className="px-10 py-8">Total Amount Due</th>
                          <th className="px-10 py-8 text-center">Status</th>
                          <th className="px-10 py-8 text-center">Actions</th>
                       </tr>
@@ -473,7 +326,6 @@ const App: React.FC = () => {
                       ).map((loan) => {
                          const penaltyInfo = calculatePenaltyDetails(loan);
                          const totalDue = loan.totalRepayment + penaltyInfo.penalty;
-                         
                          return (
                            <tr key={loan.id} className="hover:bg-indigo-50/20 transition-all group">
                               <td className="px-10 py-8">
@@ -486,78 +338,15 @@ const App: React.FC = () => {
                               <td className="px-10 py-8">
                                  <div className="flex items-center gap-3">
                                     <span className="font-bold text-gray-500 font-mono text-sm">R {loan.amountLoaned.toLocaleString()}</span>
-                                    {penaltyInfo.penalty > 0 && (
-                                      <div className="group/penalty relative flex items-center">
-                                        <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shadow-sm shadow-rose-200" />
-                                        <AlertTriangle size={14} className="text-rose-500 ml-1.5" />
-                                        <span className="absolute left-full ml-3 hidden group-hover/penalty:block bg-rose-600 text-white text-[10px] font-black px-2.5 py-1.5 rounded-lg whitespace-nowrap z-50 shadow-xl ring-2 ring-white/20">
-                                          Penalty Applied
-                                        </span>
-                                      </div>
-                                    )}
+                                    {penaltyInfo.penalty > 0 && <AlertTriangle size={14} className="text-rose-500" />}
                                  </div>
                               </td>
                               <td className="px-10 py-8">
-                                 <div className="flex flex-col">
-                                    <div className="flex items-center gap-2">
-                                       <span className="font-black text-gray-900 font-mono text-base">
-                                          R {totalDue.toLocaleString()}
-                                       </span>
-                                       {penaltyInfo.penalty > 0 && (
-                                          <div className="group/row-penalty relative cursor-help">
-                                             <Info size={12} className="text-rose-500" />
-                                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/row-penalty:block w-40 p-3 bg-white border border-rose-100 text-gray-600 text-[10px] font-bold rounded-xl shadow-xl z-50">
-                                                {loan.penaltyRate}% penalty applied for {penaltyInfo.weeks} week(s) overdue.
-                                             </div>
-                                          </div>
-                                       )}
-                                    </div>
-                                    {penaltyInfo.penalty > 0 && (
-                                      <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest mt-0.5">Incl. Penalties</span>
-                                    )}
-                                 </div>
+                                 <span className="font-black text-gray-900 font-mono text-base">R {totalDue.toLocaleString()}</span>
                               </td>
                               <td className="px-10 py-8 text-center"><StatusDot status={loan.status} /></td>
-                              <td className="px-10 py-8">
-                                 <div className="flex items-center justify-center gap-2">
-                                    <button 
-                                      onClick={() => setSelectedLoan(loan)} 
-                                      title="View Details"
-                                      className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm"
-                                    >
-                                       <Eye size={18} />
-                                    </button>
-
-                                    {loan.status !== RepaymentStatus.PAID && (
-                                      <button 
-                                        onClick={() => handleSendReminder(loan)}
-                                        title="Send WhatsApp Reminder"
-                                        className="p-3 bg-white text-emerald-500 hover:text-white hover:bg-emerald-500 rounded-xl transition-all border border-gray-100 shadow-sm"
-                                      >
-                                         <MessageSquare size={18} />
-                                      </button>
-                                    )}
-
-                                    {loan.status !== RepaymentStatus.PAID && (
-                                      <button 
-                                        onClick={() => handleMarkAsPaid(loan.id)}
-                                        title="Mark as Paid"
-                                        className="p-3 bg-white text-emerald-600 hover:text-white hover:bg-emerald-600 rounded-xl transition-all border border-gray-100 shadow-sm"
-                                      >
-                                         <Check size={18} />
-                                      </button>
-                                    )}
-
-                                    {loan.status !== RepaymentStatus.PENDING && loan.status !== RepaymentStatus.PAID && (
-                                      <button 
-                                        onClick={() => handleMarkAsPending(loan.id)}
-                                        title="Mark as Pending"
-                                        className="p-3 bg-white text-amber-600 hover:text-white hover:bg-amber-600 rounded-xl transition-all border border-gray-100 shadow-sm"
-                                      >
-                                         <Clock size={18} />
-                                      </button>
-                                    )}
-                                 </div>
+                              <td className="px-10 py-8 text-center">
+                                 <button onClick={() => setSelectedLoan(loan)} className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm"><Eye size={18} /></button>
                               </td>
                            </tr>
                          );
@@ -568,7 +357,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Other Management Tabs */}
+        {/* Borrowers CRM Tab */}
         {activeTab === 'borrowers' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
              {borrowers.map(borrower => {
@@ -576,13 +365,48 @@ const App: React.FC = () => {
                 const Icon = health.icon;
                 return (
                   <div key={borrower.idNumber} className={`group bg-white p-10 rounded-[3.5rem] border-2 transition-all duration-500 hover:shadow-2xl relative overflow-hidden ${health.type === 'elite' ? 'border-amber-200 shadow-amber-500/5' : health.type === 'good' ? 'border-emerald-100 shadow-emerald-500/5' : 'border-gray-50'}`}>
-                     <div className="flex items-start justify-between mb-10">
+                     <div className="flex items-start justify-between mb-8">
                         <div className="w-16 h-16 rounded-[1.5rem] bg-indigo-600 text-white flex items-center justify-center font-black text-2xl shadow-xl">{borrower.name[0]}</div>
                         <div className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border flex items-center gap-2 ${health.color}`}><Icon size={12} /> {health.label}</div>
                      </div>
+                     
                      <div className="space-y-6">
-                        <div><h4 className="text-2xl font-black text-gray-900 tracking-tighter leading-none mb-2">{borrower.name}</h4><p className="text-xs text-gray-400 font-bold uppercase tracking-widest">{borrower.phone}</p></div>
-                        <div className="bg-gray-50/50 p-6 rounded-3xl border border-gray-100 shadow-inner group-hover:bg-white transition-colors"><p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Lifetime Portfolio</p><p className="font-black text-gray-900 text-lg">{borrower.loans.length} Loans Issued</p></div>
+                        <div className="border-b border-gray-50 pb-6">
+                           <h4 className="text-2xl font-black text-gray-900 tracking-tighter leading-none mb-1">{borrower.name}</h4>
+                           <div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-widest mt-2">
+                             <Mail size={12} /> {borrower.email}
+                           </div>
+                        </div>
+
+                        <div className="space-y-3">
+                           <div className="flex items-start gap-4">
+                              <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><Fingerprint size={16} /></div>
+                              <div>
+                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">ID Number</p>
+                                 <p className="text-xs font-bold text-gray-700">{borrower.idNumber}</p>
+                              </div>
+                           </div>
+                           <div className="flex items-start gap-4">
+                              <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><Phone size={16} /></div>
+                              <div>
+                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mobile Contact</p>
+                                 <p className="text-xs font-bold text-gray-700">{borrower.phone}</p>
+                              </div>
+                           </div>
+                           <div className="flex items-start gap-4">
+                              <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><MapPin size={16} /></div>
+                              <div>
+                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Physical Address</p>
+                                 <p className="text-xs font-bold text-gray-700 leading-tight">{borrower.address}</p>
+                              </div>
+                           </div>
+                        </div>
+
+                        <div className="bg-gray-50/50 p-6 rounded-3xl border border-gray-100 shadow-inner group-hover:bg-white transition-colors">
+                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Lifetime Portfolio</p>
+                           <p className="font-black text-gray-900 text-lg">{borrower.loans.length} Loans Issued</p>
+                        </div>
+                        
                         <button onClick={() => setSelectedBorrowerId(borrower.idNumber)} className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl active:scale-[0.98] transition-all">View Full Profile</button>
                      </div>
                   </div>
@@ -591,7 +415,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Shared Financial Projections Tool */}
+        {/* Financial Projections Tab */}
         {activeTab === 'calculator' && (
            <div className="max-w-4xl mx-auto space-y-12 animate-in slide-in-from-bottom-12 duration-700">
               <div className="bg-white p-12 rounded-[4rem] shadow-2xl border border-gray-100 relative overflow-hidden">
@@ -622,6 +446,7 @@ const App: React.FC = () => {
            </div>
         )}
 
+        {/* Settings Tab */}
         {activeTab === 'settings' && (
           <div className="max-w-3xl mx-auto space-y-12 animate-in fade-in duration-500">
              <div className="bg-white p-12 rounded-[4rem] shadow-xl border border-gray-100 relative">
@@ -662,6 +487,7 @@ const SettingToggle = ({ icon: Icon, title, description, isActive, onToggle }: a
   </div>
 );
 
+// Unified SummaryCard component
 const SummaryCard = ({ title, value, icon: Icon, colorClass }: any) => (
   <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm relative overflow-hidden group hover:shadow-2xl transition-all">
     <div className="flex items-center justify-between relative z-10">
@@ -689,7 +515,8 @@ const LoanDetailModal = ({ loan, onClose, onPay, onMarkPending, calcPenalty }: a
             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Primary Borrower</h4>
             <p className="text-2xl font-black text-gray-900">{loan.borrowerName}</p>
             <p className="text-sm text-gray-400 font-bold uppercase tracking-widest">{loan.borrowerNumber}</p>
-            {loan.employer && <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mt-1 flex items-center gap-1"><Briefcase size={12} /> {loan.employer} ({loan.employmentStatus})</p>}
+            {loan.email && <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mt-1">{loan.email}</p>}
+            {loan.employer && <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mt-1 flex items-center gap-1"><Briefcase size={12} /> {loan.employer} ({loan.employmentStatus})</p>}
           </div>
           <div className="text-right"><h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 text-right">Repayment Status</h4><div className="flex justify-end"><StatusDot status={loan.status} /></div></div>
         </div>
@@ -740,6 +567,7 @@ const AddLoanModal = ({ onClose, onAdd }: any) => {
   const [formData, setFormData] = useState({
     borrowerName: '',
     idNumber: '',
+    email: '',
     borrowerNumber: '',
     amountLoaned: 1000,
     employer: '',
@@ -786,6 +614,16 @@ const AddLoanModal = ({ onClose, onAdd }: any) => {
           </div>
           <div className="grid grid-cols-2 gap-8">
             <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Email Address</label>
+              <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-500 shadow-inner" placeholder="name@example.com" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Mobile Number</label>
+              <input required value={formData.borrowerNumber} onChange={e => setFormData({...formData, borrowerNumber: e.target.value})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-500 shadow-inner" placeholder="082..." />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-8">
+            <div className="space-y-2">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Employer Name</label>
               <input required value={formData.employer} onChange={e => setFormData({...formData, employer: e.target.value})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-500 shadow-inner" placeholder="Company Name" />
             </div>
@@ -798,6 +636,12 @@ const AddLoanModal = ({ onClose, onAdd }: any) => {
                 <option>Self-employed</option>
               </select>
             </div>
+          </div>
+          <div className="grid grid-cols-1 gap-8">
+             <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Physical Address</label>
+                <textarea required value={formData.physicalAddress} onChange={e => setFormData({...formData, physicalAddress: e.target.value})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-500 shadow-inner h-24 resize-none" placeholder="Unit, Street, Area..." />
+             </div>
           </div>
           <div className="grid grid-cols-2 gap-8">
             <div className="space-y-2">

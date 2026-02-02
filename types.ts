@@ -56,11 +56,12 @@ export interface Loan {
   id: string;
   borrowerName: string;
   idNumber: string;
+  email?: string; // New field for borrower identification
   physicalAddress: string;
   borrowerNumber: string; // Primary mobile number
   alternativeNumber?: string;
   employer?: string;
-  employmentStatus?: string; // New field for stability details
+  employmentStatus?: string; 
   payoutMethod: PayoutMethod;
   bankDetails?: string;
   amountLoaned: number;
