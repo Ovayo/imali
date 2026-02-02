@@ -441,7 +441,20 @@ const App: React.FC = () => {
                             </td>
                             <td className="px-10 py-8 font-black text-gray-900 text-sm tracking-tight">{loan.borrowerName}</td>
                             <td className="px-10 py-8 font-bold text-gray-400 text-xs">{loan.borrowerNumber}</td>
-                            <td className="px-10 py-8 font-black text-indigo-600 font-mono text-base">R {loan.amountLoaned.toLocaleString()}</td>
+                            <td className="px-10 py-8">
+                               <div className="flex items-center gap-3">
+                                  <span className="font-black text-indigo-600 font-mono text-base">R {loan.amountLoaned.toLocaleString()}</span>
+                                  {calculatePenaltyDetails(loan).penalty > 0 && (
+                                    <div className="group/penalty relative flex items-center">
+                                      <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shadow-sm shadow-rose-200" />
+                                      <AlertTriangle size={14} className="text-rose-500 ml-1.5" />
+                                      <span className="absolute left-full ml-3 hidden group-hover/penalty:block bg-rose-600 text-white text-[10px] font-black px-2.5 py-1.5 rounded-lg whitespace-nowrap z-50 shadow-xl ring-2 ring-white/20">
+                                        Penalty Applied
+                                      </span>
+                                    </div>
+                                  )}
+                               </div>
+                            </td>
                             <td className="px-10 py-8 text-center"><StatusDot status={loan.status} /></td>
                             <td className="px-10 py-8">
                                <div className="flex items-center justify-center gap-2">
