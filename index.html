@@ -1,0 +1,91 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Imali Micro-Lending</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Lexend', sans-serif;
+            background-color: #fdfcfb;
+        }
+        /* Subtle Geometric Xhosa Pattern Watermark */
+        .xhosa-pattern {
+            background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%234F46E5' fill-opacity='0.02'%3E%3Cpath d='M40 40l20-20-20-20-20 20zm0 0l20 20-20 20-20-20zM0 40l20-20-20-20L-20 20zm0 0l20 20-20 20-20-20zm80 0l20-20-20-20-20 20zm0 0l20 20-20 20-20-20zM40 0l20-20-20-20-20 20zm0 0l20 20-20 20-20-20zm0 80l20-20-20-20-20 20zm0 0l20 20-20 20-20-20z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+        /* Umbhaco-inspired double line accent */
+        .xhosa-border {
+            border-bottom: 3px double #1a1a1a;
+            position: relative;
+        }
+        /* Subtle Repeating Xhosa Band Pattern - Transparent background with high-fidelity motif pattern */
+        .bead-accent {
+            background-color: transparent;
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='60' viewBox='0 0 100 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%231a1a1a' fill-opacity='0.12'%3E%3C!-- Boundary Lines --%3E%3Crect width='100' height='5'/%3E%3Crect y='55' width='100' height='5'/%3E%3C!-- Main X Motif --%3E%3Cpath d='M35 12 L65 48 M35 48 L65 12' stroke='%231a1a1a' stroke-opacity='0.12' stroke-width='6' fill='none'/%3E%3C!-- Nested Chevrons --%3E%3Cpath d='M38 15 L50 27 L62 15' stroke='%231a1a1a' stroke-opacity='0.12' stroke-width='4' fill='none'/%3E%3Cpath d='M42 12 L50 20 L58 12' stroke='%231a1a1a' stroke-opacity='0.12' stroke-width='3' fill='none'/%3E%3Cpath d='M38 45 L50 33 L62 45' stroke='%231a1a1a' stroke-opacity='0.12' stroke-width='4' fill='none'/%3E%3Cpath d='M42 48 L50 40 L58 48' stroke='%231a1a1a' stroke-opacity='0.12' stroke-width='3' fill='none'/%3E%3C!-- Diamonds --%3E%3Cpath d='M50 6 L54 10 L50 14 L46 10 Z'/%3E%3Cpath d='M50 46 L54 50 L50 54 L46 50 Z'/%3E%3C!-- Lateral X Spacers --%3E%3Cpath d='M8 25 L18 35 M8 35 L18 25' stroke='%231a1a1a' stroke-opacity='0.12' stroke-width='2' fill='none'/%3E%3Cpath d='M82 25 L92 35 M82 35 L92 25' stroke='%231a1a1a' stroke-opacity='0.12' stroke-width='2' fill='none'/%3E%3C/g%3E%3C/svg%3E");
+            background-size: auto 24px;
+            background-repeat: repeat-x;
+            height: 24px;
+        }
+        /* Xhosa Motif 2: Interlocking Triangles */
+        .xhosa-accent-pattern {
+            background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 20L20 0l20 20-20 20z' fill='%234F46E5' fill-opacity='0.05'/%3E%3Cpath d='M20 20l10-10-10-10-10 10z' fill='%231D3557' fill-opacity='0.03'/%3E%3C/svg%3E");
+        }
+        /* Small detail pattern */
+        .xhosa-pattern-sm {
+            background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0l10 10L20 0v20L10 10 0 20z' fill='%234F46E5' fill-opacity='0.03'/%3E%3C/svg%3E");
+        }
+        .cultural-card {
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease-in-out;
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='20' viewBox='0 0 100 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 10h100' stroke='%231a1a1a' stroke-width='0.5' fill='none' stroke-opacity='0.01'/%3E%3C/svg%3E");
+        }
+        .cultural-card:hover {
+            transform: translateY(-2px);
+        }
+        .cultural-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(225deg, #1a1a1a 0%, #1a1a1a 15%, transparent 15%, transparent 100%);
+            opacity: 0.8;
+            z-index: 5;
+        }
+        .beaded-divider {
+            height: 6px;
+            background-image: radial-gradient(circle, #1a1a1a 1.5px, transparent 1.5px);
+            background-size: 12px 6px;
+            opacity: 0.1;
+        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d1d1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #1a1a1a; }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
+    "recharts": "https://esm.sh/recharts@^3.7.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
+  }
+}
+</script>
+</head>
+<body>
+    <div id="root"></div>
+</body>
+</html>

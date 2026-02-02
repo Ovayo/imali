@@ -1,0 +1,7 @@
+{
+  "name": "Imali Micro-Lending",
+  "description": "A modern, culturally-inspired micro-lending platform designed for young South African professionals. Features include automated penalty calculations, isiXhosa cultural aesthetic, and AI-driven credit insights.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
