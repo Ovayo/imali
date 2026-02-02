@@ -423,6 +423,7 @@ const App: React.FC = () => {
                          <th className="px-10 py-8">Borrower Name</th>
                          <th className="px-10 py-8">Borrower Number</th>
                          <th className="px-10 py-8">Amount Loaned</th>
+                         <th className="px-10 py-8">Total Amount Due</th>
                          <th className="px-10 py-8 text-center">Status</th>
                          <th className="px-10 py-8 text-center">Actions</th>
                       </tr>
@@ -432,66 +433,81 @@ const App: React.FC = () => {
                         l.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
                         l.borrowerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         l.borrowerNumber.includes(searchTerm)
-                      ).map((loan) => (
-                         <tr key={loan.id} className="hover:bg-indigo-50/20 transition-all group">
-                            <td className="px-10 py-8">
-                               <div className="inline-block px-5 py-2.5 bg-[#1a1a1a] text-white rounded-xl font-black text-[11px] uppercase border-2 border-indigo-500/20 shadow-lg shadow-black/5">
-                                 {loan.id}
-                               </div>
-                            </td>
-                            <td className="px-10 py-8 font-black text-gray-900 text-sm tracking-tight">{loan.borrowerName}</td>
-                            <td className="px-10 py-8 font-bold text-gray-400 text-xs">{loan.borrowerNumber}</td>
-                            <td className="px-10 py-8">
-                               <div className="flex items-center gap-3">
-                                  <span className="font-black text-indigo-600 font-mono text-base">R {loan.amountLoaned.toLocaleString()}</span>
-                                  {calculatePenaltyDetails(loan).penalty > 0 && (
-                                    <div className="group/penalty relative flex items-center">
-                                      <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shadow-sm shadow-rose-200" />
-                                      <AlertTriangle size={14} className="text-rose-500 ml-1.5" />
-                                      <span className="absolute left-full ml-3 hidden group-hover/penalty:block bg-rose-600 text-white text-[10px] font-black px-2.5 py-1.5 rounded-lg whitespace-nowrap z-50 shadow-xl ring-2 ring-white/20">
-                                        Penalty Applied
-                                      </span>
-                                    </div>
-                                  )}
-                               </div>
-                            </td>
-                            <td className="px-10 py-8 text-center"><StatusDot status={loan.status} /></td>
-                            <td className="px-10 py-8">
-                               <div className="flex items-center justify-center gap-2">
-                                  {/* View Details */}
-                                  <button 
-                                    onClick={() => setSelectedLoan(loan)} 
-                                    title="View Details"
-                                    className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm"
-                                  >
-                                     <Eye size={18} />
-                                  </button>
-
-                                  {/* WhatsApp Reminder - Hidden if already paid */}
-                                  {loan.status !== RepaymentStatus.PAID && (
+                      ).map((loan) => {
+                         const penaltyInfo = calculatePenaltyDetails(loan);
+                         const totalDue = loan.totalRepayment + penaltyInfo.penalty;
+                         
+                         return (
+                           <tr key={loan.id} className="hover:bg-indigo-50/20 transition-all group">
+                              <td className="px-10 py-8">
+                                 <div className="inline-block px-5 py-2.5 bg-[#1a1a1a] text-white rounded-xl font-black text-[11px] uppercase border-2 border-indigo-500/20 shadow-lg shadow-black/5">
+                                   {loan.id}
+                                 </div>
+                              </td>
+                              <td className="px-10 py-8 font-black text-gray-900 text-sm tracking-tight">{loan.borrowerName}</td>
+                              <td className="px-10 py-8 font-bold text-gray-400 text-xs">{loan.borrowerNumber}</td>
+                              <td className="px-10 py-8">
+                                 <div className="flex items-center gap-3">
+                                    <span className="font-bold text-gray-500 font-mono text-sm">R {loan.amountLoaned.toLocaleString()}</span>
+                                    {penaltyInfo.penalty > 0 && (
+                                      <div className="group/penalty relative flex items-center">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shadow-sm shadow-rose-200" />
+                                        <AlertTriangle size={14} className="text-rose-500 ml-1.5" />
+                                        <span className="absolute left-full ml-3 hidden group-hover/penalty:block bg-rose-600 text-white text-[10px] font-black px-2.5 py-1.5 rounded-lg whitespace-nowrap z-50 shadow-xl ring-2 ring-white/20">
+                                          Penalty Applied
+                                        </span>
+                                      </div>
+                                    )}
+                                 </div>
+                              </td>
+                              <td className="px-10 py-8">
+                                 <div className="flex flex-col">
+                                    <span className="font-black text-gray-900 font-mono text-base">
+                                       R {totalDue.toLocaleString()}
+                                    </span>
+                                    {penaltyInfo.penalty > 0 && (
+                                      <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest mt-0.5">Incl. Penalties</span>
+                                    )}
+                                 </div>
+                              </td>
+                              <td className="px-10 py-8 text-center"><StatusDot status={loan.status} /></td>
+                              <td className="px-10 py-8">
+                                 <div className="flex items-center justify-center gap-2">
+                                    {/* View Details */}
                                     <button 
-                                      onClick={() => handleSendReminder(loan)}
-                                      title="Send WhatsApp Reminder"
-                                      className="p-3 bg-white text-emerald-500 hover:text-white hover:bg-emerald-500 rounded-xl transition-all border border-gray-100 shadow-sm"
+                                      onClick={() => setSelectedLoan(loan)} 
+                                      title="View Details"
+                                      className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm"
                                     >
-                                       <MessageSquare size={18} />
+                                       <Eye size={18} />
                                     </button>
-                                  )}
 
-                                  {/* Mark as Paid - Hidden if already paid */}
-                                  {loan.status !== RepaymentStatus.PAID && (
-                                    <button 
-                                      onClick={() => handleMarkAsPaid(loan.id)}
-                                      title="Mark as Paid"
-                                      className="p-3 bg-white text-indigo-600 hover:text-white hover:bg-indigo-600 rounded-xl transition-all border border-gray-100 shadow-sm"
-                                    >
-                                       <Check size={18} />
-                                    </button>
-                                  )}
-                               </div>
-                            </td>
-                         </tr>
-                      ))}
+                                    {/* WhatsApp Reminder - Hidden if already paid */}
+                                    {loan.status !== RepaymentStatus.PAID && (
+                                      <button 
+                                        onClick={() => handleSendReminder(loan)}
+                                        title="Send WhatsApp Reminder"
+                                        className="p-3 bg-white text-emerald-500 hover:text-white hover:bg-emerald-500 rounded-xl transition-all border border-gray-100 shadow-sm"
+                                      >
+                                         <MessageSquare size={18} />
+                                      </button>
+                                    )}
+
+                                    {/* Mark as Paid - Hidden if already paid */}
+                                    {loan.status !== RepaymentStatus.PAID && (
+                                      <button 
+                                        onClick={() => handleMarkAsPaid(loan.id)}
+                                        title="Mark as Paid"
+                                        className="p-3 bg-white text-indigo-600 hover:text-white hover:bg-indigo-600 rounded-xl transition-all border border-gray-100 shadow-sm"
+                                      >
+                                         <Check size={18} />
+                                      </button>
+                                    )}
+                                 </div>
+                              </td>
+                           </tr>
+                         );
+                      })}
                    </tbody>
                 </table>
              </div>
