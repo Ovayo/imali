@@ -60,6 +60,7 @@ export interface Loan {
   borrowerNumber: string; // Primary mobile number
   alternativeNumber?: string;
   employer?: string;
+  employmentStatus?: string; // New field for stability details
   payoutMethod: PayoutMethod;
   bankDetails?: string;
   amountLoaned: number;
