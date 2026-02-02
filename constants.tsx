@@ -4,7 +4,6 @@ import { Loan, RepaymentStatus, PayoutMethod, Language, ApplicationStatus, LoanT
 export const DEFAULT_INTEREST_RATE = 30;
 export const DEFAULT_PENALTY_RATE = 5;
 
-// Added TRANSLATIONS export to fix "Module has no exported member 'TRANSLATIONS'" error
 export const TRANSLATIONS = {
   [Language.EN]: {
     dashboard: 'Dashboard',
@@ -53,92 +52,124 @@ export const LOAN_TEMPLATES: LoanTemplate[] = [
   }
 ];
 
-export const SA_BANKS = [
-  'Standard Bank',
-  'First National Bank (FNB)',
-  'Absa',
-  'Nedbank',
-  'Capitec Bank',
-  'TymeBank',
-  'Discovery Bank',
-  'Bank Zero',
-  'African Bank',
-  'Investec',
-  'Bidvest Bank',
-  'Sasfin Bank',
-  'Grindrod Bank',
-  'Postbank',
-  'Old Mutual Bank',
-  'Mercantile Bank',
-  'Al Baraka Bank',
-  'HBZ Bank',
-  'Access Bank South Africa'
-];
-
 export const INITIAL_LOANS: Loan[] = [
   {
     id: 'T001',
     borrowerName: 'Ms S Nkila',
     idNumber: '9201010001081',
-    email: 'snkila@example.com',
-    physicalAddress: 'East London, South Africa',
+    email: 'snkila@biz.co.za',
+    physicalAddress: '12 Buffalo St, East London',
     borrowerNumber: '0660710211',
     payoutMethod: PayoutMethod.MOBILE,
     amountLoaned: 400,
     interestRate: 30,
     penaltyRate: 5,
     totalRepayment: 520,
-    startDate: '2025-11-15',
-    dueDate: '2025-12-01',
+    startDate: '2025-01-15',
+    dueDate: '2025-02-01',
     status: RepaymentStatus.PAID,
     applicationStatus: ApplicationStatus.APPROVED,
-    notes: '20% for Aretha',
     history: [
-      { date: '2025-11-15', action: 'Loan Disbursed', amount: 400 },
-      { date: '2025-12-01', action: 'Full Repayment Received', amount: 520 }
+      { date: '2025-01-15', action: 'Loan Disbursed', amount: 400 },
+      { date: '2025-02-01', action: 'Full Repayment Received', amount: 520 }
     ]
   },
   {
     id: 'T002',
     borrowerName: 'Ms A Gwavu',
     idNumber: '8805120002084',
-    email: 'agwavu@example.com',
-    physicalAddress: 'Qonce, South Africa',
+    email: 'agwavu@cloud.com',
+    physicalAddress: '45 High St, Qonce',
     borrowerNumber: '0694266153',
     payoutMethod: PayoutMethod.MOBILE,
     amountLoaned: 400,
     interestRate: 30,
     penaltyRate: 5,
     totalRepayment: 520,
-    startDate: '2025-11-15',
-    dueDate: '2025-11-25',
+    startDate: '2025-02-10',
+    dueDate: '2025-02-20',
     status: RepaymentStatus.PAID,
     applicationStatus: ApplicationStatus.APPROVED,
-    notes: '20% for Aretha',
     history: [
-      { date: '2025-11-15', action: 'Loan Disbursed', amount: 400 },
-      { date: '2025-11-25', action: 'Full Repayment Received', amount: 520 }
+      { date: '2025-02-10', action: 'Loan Disbursed', amount: 400 },
+      { date: '2025-02-20', action: 'Full Repayment Received', amount: 520 }
     ]
   },
   {
     id: 'T011',
-    borrowerName: 'U Zokhela',
+    borrowerName: 'Mr U Zokhela',
     idNumber: '9611200014087',
-    email: 'uzokhela@example.com',
-    physicalAddress: 'Mdantsane, South Africa',
+    email: 'uzokhela@work.za',
+    physicalAddress: 'Block C, Mdantsane',
     borrowerNumber: '0730713439',
     payoutMethod: PayoutMethod.MOBILE,
     amountLoaned: 3000,
     interestRate: 60,
     penaltyRate: 5,
     totalRepayment: 4800,
-    startDate: '2025-12-01',
-    dueDate: '2025-12-20',
+    startDate: '2025-03-01',
+    dueDate: '2025-03-15',
     status: RepaymentStatus.OVERDUE,
     applicationStatus: ApplicationStatus.APPROVED,
-    notes: '40% for Aretha',
     history: [
-      { date: '2025-12-01', action: 'Loan Disbursed', amount: 3000 }
+      { date: '2025-03-01', action: 'Loan Disbursed', amount: 3000 }
     ]
+  },
+  {
+    id: 'T014',
+    borrowerName: 'Mrs B Mbeki',
+    idNumber: '7503145001089',
+    email: 'b.mbeki@home.co.za',
+    physicalAddress: '78 Phakamisa Ext, Zwelitsha',
+    borrowerNumber: '0824419902',
+    payoutMethod: PayoutMethod.BANK,
+    amountLoaned: 1500,
+    interestRate: 30,
+    penaltyRate: 5,
+    totalRepayment: 1950,
+    startDate: '2025-03-05',
+    dueDate: '2025-03-25',
+    status: RepaymentStatus.PENDING,
+    applicationStatus: ApplicationStatus.APPROVED,
+    history: [{ date: '2025-03-05', action: 'Loan Disbursed', amount: 1500 }]
+  },
+  {
+    id: 'T015',
+    borrowerName: 'Mr J September',
+    idNumber: '8209210003082',
+    email: 'september.j@mail.za',
+    physicalAddress: 'Unit 4, Beacon Bay',
+    borrowerNumber: '0715568821',
+    payoutMethod: PayoutMethod.MOBILE,
+    amountLoaned: 800,
+    interestRate: 30,
+    penaltyRate: 5,
+    totalRepayment: 1040,
+    startDate: '2025-02-20',
+    dueDate: '2025-03-05',
+    status: RepaymentStatus.PAID,
+    applicationStatus: ApplicationStatus.APPROVED,
+    history: [
+      { date: '2025-02-20', action: 'Loan Disbursed', amount: 800 },
+      { date: '2025-03-05', action: 'Full Repayment Received', amount: 1040 }
+    ]
+  },
+  {
+    id: 'T018',
+    borrowerName: 'Ms L Dlamini',
+    idNumber: '9405060012081',
+    email: 'dlamini.l@fintech.za',
+    physicalAddress: '19 Southernwood, Mthatha',
+    borrowerNumber: '0632219984',
+    payoutMethod: PayoutMethod.BANK,
+    amountLoaned: 5000,
+    interestRate: 20,
+    penaltyRate: 5,
+    totalRepayment: 6000,
+    startDate: '2025-03-10',
+    dueDate: '2025-04-10',
+    status: RepaymentStatus.PENDING,
+    applicationStatus: ApplicationStatus.APPROVED,
+    history: [{ date: '2025-03-10', action: 'Large Business Loan Disbursed', amount: 5000 }]
   }
 ];

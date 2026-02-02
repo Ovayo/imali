@@ -1,32 +1,28 @@
-
 import * as React from 'react';
 import { useState, useMemo, useEffect } from 'react';
 import Layout from './components/Layout';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, Legend
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { Loan, RepaymentStatus, PayoutMethod, Language, UserSettings, UserRole, ApplicationStatus, ChatMessage } from './types';
 import { 
-  TrendingUp, AlertCircle, CheckCircle2, Clock, Plus, Phone, CreditCard,
-  X, Check, User, MapPin, Fingerprint,
-  Send, Smartphone, ShieldCheck, Bell, Mail, Save, Search, 
+  TrendingUp, AlertCircle, CheckCircle2, Clock, Plus, Phone,
+  X, Mail, Search, Fingerprint, MapPin,
   Wallet, ArrowRight,
-  Edit2, MessageCircle, MessageSquare, Loader2, Calculator as CalcIcon, Eye, ArrowLeftRight, Trash2, AlertTriangle, Coins, Crown, Sparkles, ToggleLeft, ToggleRight,
-  ClipboardList,
-  Building,
+  MessageCircle, MessageSquare, Loader2, Eye, ArrowRightLeft, AlertTriangle, Coins, Crown, Sparkles, ToggleLeft, ToggleRight,
   Activity,
   Info,
-  Briefcase
+  Users,
+  // Added ShieldCheck and Send to fix "Cannot find name" errors
+  ShieldCheck,
+  Send
 } from 'lucide-react';
 import { getCreditRiskInsights, getChatResponse } from './services/geminiService';
 import { 
   DEFAULT_INTEREST_RATE, 
   DEFAULT_PENALTY_RATE,
   INITIAL_LOANS, 
-  TRANSLATIONS,
-  LOAN_TEMPLATES,
-  SA_BANKS
+  TRANSLATIONS
 } from './constants';
 
 const StatusDot = ({ status }: { status: RepaymentStatus }) => {
@@ -51,13 +47,11 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [userRole, setUserRole] = useState<UserRole>(UserRole.LENDER); 
   
-  // Persistent Loans
   const [loans, setLoans] = useState<Loan[]>(() => {
     const saved = localStorage.getItem('imali_loans_v1');
     return saved ? JSON.parse(saved) : INITIAL_LOANS;
   });
 
-  // Persistent Settings
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('imali_settings_v1');
     return saved ? JSON.parse(saved) : {
@@ -70,11 +64,9 @@ const App: React.FC = () => {
     };
   });
 
-  // Calculator State
   const [calcAmount, setCalcAmount] = useState(1000);
   const [calcWeeks, setCalcWeeks] = useState(4);
 
-  // Modals & UI
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null);
@@ -82,12 +74,7 @@ const App: React.FC = () => {
   const [isLoadingAi, setIsLoadingAi] = useState(false);
   const [showToast, setShowToast] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-
-  // Borrower Portal States
-  const [borrowerSearchId, setBorrowerSearchId] = useState('');
-  const [myLoans, setMyLoans] = useState<Loan[]>([]);
-  const [hasSearchedMyLoans, setHasSearchedMyLoans] = useState(false);
-  const [borrowerActiveView, setBorrowerActiveView] = useState<'track' | 'apply'>('track');
+  const [borrowerSearchTerm, setBorrowerSearchTerm] = useState('');
 
   const t = TRANSLATIONS[language];
 
@@ -124,6 +111,16 @@ const App: React.FC = () => {
     });
     return Array.from(map.values());
   }, [loans]);
+
+  const filteredBorrowers = useMemo(() => {
+    if (!borrowerSearchTerm.trim()) return borrowers;
+    const lowSearch = borrowerSearchTerm.toLowerCase();
+    return borrowers.filter(b => 
+      b.name.toLowerCase().includes(lowSearch) || 
+      b.idNumber.includes(lowSearch) || 
+      b.email.toLowerCase().includes(lowSearch)
+    );
+  }, [borrowers, borrowerSearchTerm]);
 
   const stats = useMemo(() => {
     const totalLoaned = loans.reduce((acc, l) => acc + l.amountLoaned, 0);
@@ -196,11 +193,6 @@ const App: React.FC = () => {
     setTimeout(() => setShowToast(null), 3000);
   };
 
-  const handleSendReminder = (loan: Loan) => {
-    setShowToast(`WhatsApp reminder sent to ${loan.borrowerName}`);
-    setTimeout(() => setShowToast(null), 3000);
-  };
-
   const handleAddLoan = (newLoan: Loan) => {
     setLoans(prev => [...prev, newLoan]);
     setIsAddModalOpen(false);
@@ -215,13 +207,8 @@ const App: React.FC = () => {
     if (hasOverdue) return { label: 'Action Required', color: 'bg-rose-50 text-rose-600 border-rose-100', type: 'bad', icon: AlertTriangle };
     if (paidCount === totalCount && totalCount >= 3) return { label: 'Elite Member', color: 'bg-amber-50 text-amber-600 border-amber-200', type: 'elite', icon: Crown };
     if (paidCount === totalCount && totalCount > 0) return { label: 'Trusted Member', color: 'bg-emerald-50 text-emerald-600 border-emerald-100', type: 'good', icon: CheckCircle2 };
+    // ShieldCheck icon fix applied here (imported above)
     return { label: 'Good Standing', color: 'bg-indigo-50 text-indigo-600 border-indigo-100', type: 'neutral', icon: ShieldCheck };
-  };
-
-  const handleSearchMyLoans = () => {
-    const results = loans.filter(l => l.idNumber === borrowerSearchId || l.borrowerNumber === borrowerSearchId);
-    setMyLoans(results);
-    setHasSearchedMyLoans(true);
   };
 
   useEffect(() => {
@@ -232,23 +219,19 @@ const App: React.FC = () => {
     localStorage.setItem('imali_settings_v1', JSON.stringify(settings));
   }, [settings]);
 
-  // ---------------------------------------------------------------------------
-  // RENDER: LENDER PAGE (CRM)
-  // ---------------------------------------------------------------------------
-
   return (
     <Layout
       activeTab={activeTab} setActiveTab={setActiveTab}
       language={language} setLanguage={setLanguage}
-      userRole={userRole} toggleRole={() => setUserRole(UserRole.BORROWER)}
+      // Fixed toggle logic to actually switch roles
+      userRole={userRole} toggleRole={() => setUserRole(userRole === UserRole.LENDER ? UserRole.BORROWER : UserRole.LENDER)}
       onRefresh={handleRefreshInsights}
     >
       {showToast && <div className="fixed top-8 right-8 z-[300] bg-indigo-600 text-white px-8 py-4 rounded-2xl shadow-2xl font-black uppercase text-xs tracking-widest flex items-center gap-3"><CheckCircle2 size={18} /> {showToast}</div>}
 
       <div className="space-y-10 animate-in fade-in duration-500 pb-20">
         {activeTab === 'dashboard' && (
-          <div className="space-y-10">
-            {/* Quick Stats Grid */}
+          <div className="space-y-12">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <SummaryCard title="Total Loaned" value={`R ${stats.totalLoaned.toLocaleString()}`} icon={Wallet} colorClass="bg-indigo-50 text-indigo-600" />
               <SummaryCard title="Outstanding" value={`R ${stats.totalOutstanding.toLocaleString()}`} icon={Coins} colorClass="bg-amber-50 text-amber-600" />
@@ -256,7 +239,6 @@ const App: React.FC = () => {
               <SummaryCard title="Overdue" value={stats.overdueCount} icon={AlertCircle} colorClass="bg-rose-50 text-rose-600" />
             </div>
 
-            {/* AI and Trends Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                <div className="lg:col-span-2 bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm relative overflow-hidden">
                   <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-10 flex items-center gap-2"><Activity size={20} className="text-indigo-600" /> Disbursement Activity</h3>
@@ -285,10 +267,41 @@ const App: React.FC = () => {
                   </div>
                </div>
             </div>
+
+            <div className="space-y-8">
+               <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-black text-gray-900 tracking-tighter uppercase">Active Watchlist</h3>
+                  <button onClick={() => setActiveTab('loans')} className="text-xs font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2 hover:gap-4 transition-all">View All Ledger <ArrowRight size={14} /></button>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {loans.filter(l => l.status !== RepaymentStatus.PAID).slice(0, 6).map(loan => {
+                     const penaltyInfo = calculatePenaltyDetails(loan);
+                     const totalDue = loan.totalRepayment + penaltyInfo.penalty;
+                     return (
+                        <div key={loan.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm relative overflow-hidden group hover:shadow-xl transition-all flex flex-col">
+                           <div className="flex justify-between items-start mb-6">
+                              <div className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-indigo-100">{loan.id}</div>
+                              <StatusDot status={loan.status} />
+                           </div>
+                           <div className="mb-6">
+                              <h4 className="text-xl font-black text-gray-900 leading-none">{loan.borrowerName}</h4>
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-2">Due {loan.dueDate}</p>
+                           </div>
+                           <div className="mt-auto pt-6 border-t border-gray-50 flex justify-between items-end">
+                              <div>
+                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount Still to Pay</p>
+                                 <p className="text-2xl font-black text-indigo-600 font-mono">R {totalDue.toLocaleString()}</p>
+                              </div>
+                              <button onClick={() => setSelectedLoan(loan)} className="p-4 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-2xl transition-all"><Eye size={20} /></button>
+                           </div>
+                        </div>
+                     );
+                  })}
+               </div>
+            </div>
           </div>
         )}
 
-        {/* Ledger Tab */}
         {activeTab === 'loans' && (
           <div className="bg-white rounded-[3.5rem] border border-gray-100 shadow-xl overflow-hidden relative flex flex-col h-[75vh]">
              <div className="p-10 border-b border-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-8 relative z-10 shrink-0">
@@ -313,7 +326,12 @@ const App: React.FC = () => {
                          <th className="px-10 py-8">Borrower Name</th>
                          <th className="px-10 py-8">Borrower Number</th>
                          <th className="px-10 py-8">Amount Loaned</th>
-                         <th className="px-10 py-8">Total Amount Due</th>
+                         <th className="px-10 py-8">
+                            <div className="flex items-center gap-2">
+                               Total Amount Due
+                               <Info size={12} className="text-indigo-400" />
+                            </div>
+                         </th>
                          <th className="px-10 py-8 text-center">Status</th>
                          <th className="px-10 py-8 text-center">Actions</th>
                       </tr>
@@ -338,11 +356,10 @@ const App: React.FC = () => {
                               <td className="px-10 py-8">
                                  <div className="flex items-center gap-3">
                                     <span className="font-bold text-gray-500 font-mono text-sm">R {loan.amountLoaned.toLocaleString()}</span>
-                                    {penaltyInfo.penalty > 0 && <AlertTriangle size={14} className="text-rose-500" />}
                                  </div>
                               </td>
                               <td className="px-10 py-8">
-                                 <span className="font-black text-gray-900 font-mono text-base">R {totalDue.toLocaleString()}</span>
+                                 <span className="font-black text-indigo-600 font-mono text-base">R {totalDue.toLocaleString()}</span>
                               </td>
                               <td className="px-10 py-8 text-center"><StatusDot status={loan.status} /></td>
                               <td className="px-10 py-8 text-center">
@@ -357,65 +374,71 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Borrowers CRM Tab */}
         {activeTab === 'borrowers' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-             {borrowers.map(borrower => {
-                const health = getBorrowerHealth(borrower.loans);
-                const Icon = health.icon;
-                return (
-                  <div key={borrower.idNumber} className={`group bg-white p-10 rounded-[3.5rem] border-2 transition-all duration-500 hover:shadow-2xl relative overflow-hidden ${health.type === 'elite' ? 'border-amber-200 shadow-amber-500/5' : health.type === 'good' ? 'border-emerald-100 shadow-emerald-500/5' : 'border-gray-50'}`}>
-                     <div className="flex items-start justify-between mb-8">
-                        <div className="w-16 h-16 rounded-[1.5rem] bg-indigo-600 text-white flex items-center justify-center font-black text-2xl shadow-xl">{borrower.name[0]}</div>
-                        <div className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border flex items-center gap-2 ${health.color}`}><Icon size={12} /> {health.label}</div>
-                     </div>
-                     
-                     <div className="space-y-6">
-                        <div className="border-b border-gray-50 pb-6">
-                           <h4 className="text-2xl font-black text-gray-900 tracking-tighter leading-none mb-1">{borrower.name}</h4>
-                           <div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-widest mt-2">
-                             <Mail size={12} /> {borrower.email}
-                           </div>
-                        </div>
+          <div className="space-y-10">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+               <div className="relative w-full md:w-96 group">
+                  <Search size={20} className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" />
+                  <input 
+                    value={borrowerSearchTerm}
+                    onChange={(e) => setBorrowerSearchTerm(e.target.value)}
+                    placeholder="Search Borrower Name, ID, Email..." 
+                    className="w-full pl-14 pr-8 py-5 bg-white border border-gray-100 rounded-[2rem] focus:ring-2 focus:ring-indigo-600 transition-all text-sm font-medium shadow-sm" 
+                  />
+               </div>
+               <div className="px-8 py-4 bg-indigo-50 rounded-[1.5rem] border border-indigo-100">
+                 <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-3">
+                   <Users size={16} /> Total Borrowers: {borrowers.length}
+                 </p>
+               </div>
+            </div>
 
-                        <div className="space-y-3">
-                           <div className="flex items-start gap-4">
-                              <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><Fingerprint size={16} /></div>
-                              <div>
-                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">ID Number</p>
-                                 <p className="text-xs font-bold text-gray-700">{borrower.idNumber}</p>
-                              </div>
-                           </div>
-                           <div className="flex items-start gap-4">
-                              <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><Phone size={16} /></div>
-                              <div>
-                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mobile Contact</p>
-                                 <p className="text-xs font-bold text-gray-700">{borrower.phone}</p>
-                              </div>
-                           </div>
-                           <div className="flex items-start gap-4">
-                              <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><MapPin size={16} /></div>
-                              <div>
-                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Physical Address</p>
-                                 <p className="text-xs font-bold text-gray-700 leading-tight">{borrower.address}</p>
-                              </div>
-                           </div>
-                        </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+               {filteredBorrowers.map(borrower => {
+                  const health = getBorrowerHealth(borrower.loans);
+                  const Icon = health.icon;
+                  return (
+                    <div key={borrower.idNumber} className={`group bg-white p-10 rounded-[3.5rem] border-2 transition-all duration-500 hover:shadow-2xl relative overflow-hidden ${health.type === 'elite' ? 'border-amber-200 shadow-amber-500/5' : health.type === 'good' ? 'border-emerald-100 shadow-emerald-500/5' : 'border-gray-50'}`}>
+                       <div className="flex items-start justify-between mb-8">
+                          <div className="w-16 h-16 rounded-[1.5rem] bg-indigo-600 text-white flex items-center justify-center font-black text-2xl shadow-xl">{borrower.name[0]}</div>
+                          <div className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border flex items-center gap-2 ${health.color}`}><Icon size={12} /> {health.label}</div>
+                       </div>
+                       
+                       <div className="space-y-6">
+                          <div className="pb-6 border-b border-gray-50">
+                             <h4 className="text-2xl font-black text-gray-900 tracking-tighter leading-none mb-6">{borrower.name}</h4>
+                             
+                             <div className="space-y-3">
+                                <div className="flex items-center gap-3 text-gray-500 font-bold text-[11px] uppercase tracking-wider">
+                                  <Mail size={14} className="text-indigo-600 shrink-0" /> {borrower.email}
+                                </div>
+                                <div className="flex items-center gap-3 text-gray-500 font-bold text-[11px] uppercase tracking-wider">
+                                  <Fingerprint size={14} className="text-indigo-600 shrink-0" /> ID: {borrower.idNumber}
+                                </div>
+                                <div className="flex items-start gap-3 text-gray-500 font-bold text-[11px] uppercase tracking-wider">
+                                  <MapPin size={14} className="text-indigo-600 shrink-0 mt-0.5" /> 
+                                  <span className="leading-tight">{borrower.address}</span>
+                                </div>
+                             </div>
+                          </div>
 
-                        <div className="bg-gray-50/50 p-6 rounded-3xl border border-gray-100 shadow-inner group-hover:bg-white transition-colors">
-                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Lifetime Portfolio</p>
-                           <p className="font-black text-gray-900 text-lg">{borrower.loans.length} Loans Issued</p>
-                        </div>
-                        
-                        <button onClick={() => setSelectedBorrowerId(borrower.idNumber)} className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl active:scale-[0.98] transition-all">View Full Profile</button>
-                     </div>
-                  </div>
-                );
-             })}
+                          <div className="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100/50 shadow-inner group-hover:bg-white transition-colors">
+                             <div className="flex justify-between items-center mb-1">
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Lifetime Portfolio</p>
+                                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{health.label}</span>
+                             </div>
+                             <p className="font-black text-gray-900 text-lg">{borrower.loans.length} Active & Past Loans</p>
+                          </div>
+                          
+                          <button onClick={() => setSelectedBorrowerId(borrower.idNumber)} className="w-full py-5 bg-gray-900 text-white rounded-[1.5rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-3"><Users size={16} /> View Profile</button>
+                       </div>
+                    </div>
+                  );
+               })}
+            </div>
           </div>
         )}
 
-        {/* Financial Projections Tab */}
         {activeTab === 'calculator' && (
            <div className="max-w-4xl mx-auto space-y-12 animate-in slide-in-from-bottom-12 duration-700">
               <div className="bg-white p-12 rounded-[4rem] shadow-2xl border border-gray-100 relative overflow-hidden">
@@ -446,36 +469,28 @@ const App: React.FC = () => {
            </div>
         )}
 
-        {/* Settings Tab */}
         {activeTab === 'settings' && (
           <div className="max-w-3xl mx-auto space-y-12 animate-in fade-in duration-500">
              <div className="bg-white p-12 rounded-[4rem] shadow-xl border border-gray-100 relative">
                 <h3 className="text-3xl font-black text-gray-900 tracking-tighter mb-12 uppercase">Preferences</h3>
                 <div className="divide-y divide-gray-50">
-                  <SettingToggle icon={Bell} title="System Alerts" description="Status updates for all active ledger entries." isActive={settings.overdueAlerts} onToggle={() => setSettings({...settings, overdueAlerts: !settings.overdueAlerts})} />
+                  <SettingToggle icon={AlertCircle} title="System Alerts" description="Status updates for all active ledger entries." isActive={settings.overdueAlerts} onToggle={() => setSettings({...settings, overdueAlerts: !settings.overdueAlerts})} />
                   <SettingToggle icon={MessageSquare} title="WhatsApp Sync" description="Enable automated Ubuntu reminders to clients." isActive={settings.whatsappAutomation} onToggle={() => setSettings({...settings, whatsappAutomation: !settings.whatsappAutomation})} />
                   <SettingToggle icon={Mail} title="Weekly Motif Report" description="Receive a full portfolio breakdown via email." isActive={settings.emailReports} onToggle={() => setSettings({...settings, emailReports: !settings.emailReports})} />
-                </div>
-                <div className="pt-12">
-                   <button className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-100 active:scale-95 transition-all">Save Operations Motif</button>
                 </div>
              </div>
           </div>
         )}
       </div>
 
-      {/* Shared Modals */}
       {selectedLoan && <LoanDetailModal loan={selectedLoan} onClose={() => setSelectedLoan(null)} onPay={handleMarkAsPaid} onMarkPending={handleMarkAsPending} calcPenalty={calculatePenaltyDetails} />}
       {selectedBorrowerId && <BorrowerHistoryModal borrower={borrowers.find(b => b.idNumber === selectedBorrowerId)!} onClose={() => setSelectedBorrowerId(null)} calcPenalty={calculatePenaltyDetails} />}
       {isAddModalOpen && <AddLoanModal onClose={() => setIsAddModalOpen(false)} onAdd={handleAddLoan} />}
       
-      {/* AI Chat Assistant */}
       <ChatAssistant isOpen={isChatOpen} setIsOpen={setIsChatOpen} chatHistory={chatHistory} chatInput={chatInput} setChatInput={setChatInput} handleSendChat={handleSendChat} isChatTyping={isChatTyping} />
     </Layout>
   );
 };
-
-// --- SUB-COMPONENTS ---
 
 const SettingToggle = ({ icon: Icon, title, description, isActive, onToggle }: any) => (
   <div className="py-10 flex items-center justify-between group">
@@ -487,7 +502,6 @@ const SettingToggle = ({ icon: Icon, title, description, isActive, onToggle }: a
   </div>
 );
 
-// Unified SummaryCard component
 const SummaryCard = ({ title, value, icon: Icon, colorClass }: any) => (
   <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm relative overflow-hidden group hover:shadow-2xl transition-all">
     <div className="flex items-center justify-between relative z-10">
@@ -500,68 +514,78 @@ const SummaryCard = ({ title, value, icon: Icon, colorClass }: any) => (
   </div>
 );
 
-const LoanDetailModal = ({ loan, onClose, onPay, onMarkPending, calcPenalty }: any) => (
-  <div className="fixed inset-0 z-[250] bg-black/50 backdrop-blur-md flex items-center justify-center p-6">
-    <div className="bg-white w-full max-w-xl rounded-[4rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 relative flex flex-col">
-      <div className="bg-[#1a1a1a] p-12 text-white relative shrink-0">
-        <div className="flex justify-between items-start relative z-10">
-          <div><p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Transaction Ledger</p><h3 className="text-4xl font-black tracking-tighter uppercase">{loan.id}</h3></div>
-          <button onClick={onClose} className="p-4 hover:bg-white/10 rounded-full transition-all border border-white/10"><X size={28} /></button>
-        </div>
-      </div>
-      <div className="p-12 space-y-10 flex-1 overflow-y-auto custom-scrollbar">
-        <div className="flex justify-between items-start">
-          <div>
-            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Primary Borrower</h4>
-            <p className="text-2xl font-black text-gray-900">{loan.borrowerName}</p>
-            <p className="text-sm text-gray-400 font-bold uppercase tracking-widest">{loan.borrowerNumber}</p>
-            {loan.email && <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mt-1">{loan.email}</p>}
-            {loan.employer && <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest mt-1 flex items-center gap-1"><Briefcase size={12} /> {loan.employer} ({loan.employmentStatus})</p>}
-          </div>
-          <div className="text-right"><h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 text-right">Repayment Status</h4><div className="flex justify-end"><StatusDot status={loan.status} /></div></div>
-        </div>
-        
-        <div className="bg-indigo-50/50 rounded-[2.5rem] p-10 border border-indigo-100/50 space-y-6">
-          <div className="flex justify-between items-center"><span className="text-xs font-black text-gray-500 uppercase tracking-widest">Principal</span><span className="font-black text-gray-900 text-lg">R {loan.amountLoaned.toLocaleString()}</span></div>
-          <div className="flex justify-between items-center"><span className="text-xs font-black text-gray-500 uppercase tracking-widest">Calculated Interest</span><span className="font-black text-indigo-600 text-lg">R {(loan.amountLoaned * loan.interestRate / 100).toLocaleString()}</span></div>
-          {calcPenalty(loan).penalty > 0 && <div className="flex justify-between items-center text-rose-600"><span className="text-xs font-black uppercase">Active Penalty</span><span className="font-black text-lg">+ R {calcPenalty(loan).penalty.toLocaleString()}</span></div>}
-          <div className="pt-6 border-t border-indigo-100 flex justify-between items-center"><span className="text-sm font-black uppercase text-gray-900 tracking-widest">Total Repayment Due</span><span className="text-4xl font-black text-gray-900 font-mono">R {(loan.totalRepayment + calcPenalty(loan).penalty).toLocaleString()}</span></div>
-        </div>
+const LoanDetailModal = ({ loan, onClose, onPay, onMarkPending, calcPenalty }: any) => {
+  const penaltyInfo = calcPenalty(loan);
+  const totalDue = loan.totalRepayment + penaltyInfo.penalty;
 
-        <div className="space-y-4">
-          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Actions</h4>
-          <div className="grid grid-cols-2 gap-4">
-            {loan.status !== RepaymentStatus.PAID && (
-              <button onClick={() => { onPay(loan.id); onClose(); }} className="py-5 bg-emerald-600 text-white rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-3">
-                <CheckCircle2 size={18} /> Mark Paid
-              </button>
-            )}
-            {loan.status !== RepaymentStatus.PENDING && loan.status !== RepaymentStatus.PAID && (
-              <button onClick={() => { onMarkPending(loan.id); onClose(); }} className="py-5 bg-amber-500 text-white rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:bg-amber-600 active:scale-95 transition-all flex items-center justify-center gap-3">
-                <Clock size={18} /> Mark Pending
-              </button>
-            )}
+  return (
+    <div className="fixed inset-0 z-[250] bg-black/50 backdrop-blur-md flex items-center justify-center p-6">
+      <div className="bg-white w-full max-w-xl rounded-[4rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 relative flex flex-col">
+        <div className="bg-[#1a1a1a] p-12 text-white relative shrink-0">
+          <div className="flex justify-between items-start relative z-10">
+            <div><p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Transaction Ledger</p><h3 className="text-4xl font-black tracking-tighter uppercase">{loan.id}</h3></div>
+            <button onClick={onClose} className="p-4 hover:bg-white/10 rounded-full transition-all border border-white/10"><X size={28} /></button>
           </div>
         </div>
+        <div className="p-12 space-y-10 flex-1 overflow-y-auto custom-scrollbar">
+          <div className="flex justify-between items-start">
+            <div>
+              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Primary Borrower</h4>
+              <p className="text-2xl font-black text-gray-900">{loan.borrowerName}</p>
+              <p className="text-sm text-gray-400 font-bold uppercase tracking-widest">{loan.borrowerNumber}</p>
+              {loan.email && <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mt-1">{loan.email}</p>}
+            </div>
+            <div className="text-right"><h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 text-right">Repayment Status</h4><div className="flex justify-end"><StatusDot status={loan.status} /></div></div>
+          </div>
+          
+          <div className="bg-indigo-50/50 rounded-[2.5rem] p-10 border border-indigo-100/50 space-y-6">
+            <div className="flex justify-between items-center"><span className="text-xs font-black text-gray-500 uppercase tracking-widest">Principal</span><span className="font-black text-gray-900 text-lg">R {loan.amountLoaned.toLocaleString()}</span></div>
+            <div className="flex justify-between items-center"><span className="text-xs font-black text-gray-500 uppercase tracking-widest">Calculated Interest</span><span className="font-black text-indigo-600 text-lg">R {(loan.amountLoaned * loan.interestRate / 100).toLocaleString()}</span></div>
+            {penaltyInfo.penalty > 0 && <div className="flex justify-between items-center text-rose-600"><span className="text-xs font-black uppercase">Active Penalty</span><span className="font-black text-lg">+ R {penaltyInfo.penalty.toLocaleString()}</span></div>}
+            <div className="pt-6 border-t border-indigo-100 flex justify-between items-center">
+               <div>
+                  <span className="text-sm font-black uppercase text-gray-900 tracking-widest">Amount Still to Pay</span>
+                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">Settlement Figure</p>
+               </div>
+               <span className="text-4xl font-black text-gray-900 font-mono">R {totalDue.toLocaleString()}</span>
+            </div>
+          </div>
 
-        <div className="space-y-4">
-          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Audit History</h4>
-          <div className="space-y-3">
-            {loan.history.map((h: any, idx: number) => (
-              <div key={idx} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                <div className="flex flex-col">
-                  <span className="text-xs font-black text-gray-900 uppercase tracking-tight">{h.action}</span>
-                  <span className="text-[9px] text-gray-400 font-bold">{h.date}</span>
+          <div className="space-y-4">
+            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Actions</h4>
+            <div className="grid grid-cols-2 gap-4">
+              {loan.status !== RepaymentStatus.PAID && (
+                <button onClick={() => { onPay(loan.id); onClose(); }} className="py-5 bg-emerald-600 text-white rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-3">
+                  <CheckCircle2 size={18} /> Mark Paid
+                </button>
+              )}
+              {loan.status !== RepaymentStatus.PENDING && loan.status !== RepaymentStatus.PAID && (
+                <button onClick={() => { onMarkPending(loan.id); onClose(); }} className="py-5 bg-amber-500 text-white rounded-[1.5rem] font-black uppercase text-xs tracking-widest shadow-xl hover:bg-amber-600 active:scale-95 transition-all flex items-center justify-center gap-3">
+                  <Clock size={18} /> Mark Pending
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Audit History</h4>
+            <div className="space-y-3">
+              {loan.history.map((h: any, idx: number) => (
+                <div key={idx} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-black text-gray-900 uppercase tracking-tight">{h.action}</span>
+                    <span className="text-[9px] text-gray-400 font-bold">{h.date}</span>
+                  </div>
+                  {h.amount && <span className="font-black text-indigo-600 text-xs font-mono">R {h.amount.toLocaleString()}</span>}
                 </div>
-                {h.amount && <span className="font-black text-indigo-600 text-xs font-mono">R {h.amount.toLocaleString()}</span>}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const AddLoanModal = ({ onClose, onAdd }: any) => {
   const [formData, setFormData] = useState({
@@ -620,21 +644,6 @@ const AddLoanModal = ({ onClose, onAdd }: any) => {
             <div className="space-y-2">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Mobile Number</label>
               <input required value={formData.borrowerNumber} onChange={e => setFormData({...formData, borrowerNumber: e.target.value})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-500 shadow-inner" placeholder="082..." />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-8">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Employer Name</label>
-              <input required value={formData.employer} onChange={e => setFormData({...formData, employer: e.target.value})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-500 shadow-inner" placeholder="Company Name" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Employment Status</label>
-              <select value={formData.employmentStatus} onChange={e => setFormData({...formData, employmentStatus: e.target.value})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-500 shadow-inner appearance-none">
-                <option>Full-time</option>
-                <option>Part-time</option>
-                <option>Contract</option>
-                <option>Self-employed</option>
-              </select>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-8">
@@ -715,6 +724,7 @@ const ChatAssistant = ({ isOpen, setIsOpen, chatHistory, chatInput, setChatInput
         </div>
         <div className="p-10 bg-white border-t border-gray-100 flex gap-4">
           <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Type your message..." className="flex-1 bg-gray-50 border-none rounded-[2rem] px-8 py-5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all outline-none" onKeyPress={(e) => e.key === 'Enter' && handleSendChat()} />
+          {/* Fixed "Cannot find name 'Send'" error by adding to imports */}
           <button onClick={handleSendChat} disabled={!chatInput.trim() || isChatTyping} className="p-5 bg-indigo-600 text-white rounded-[1.5rem] hover:bg-indigo-700 transition-all shadow-xl disabled:opacity-50"><Send size={24} /></button>
         </div>
       </div>
