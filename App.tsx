@@ -12,7 +12,7 @@ import {
   ChevronRight, Sparkles, History, Info, X, Check, User, MapPin, Fingerprint,
   Send, Building2, Smartphone, ShieldCheck, Bell, Mail, Save, Search, Filter,
   Tag, Globe, ExternalLink, Users, Activity, LogOut, ArrowRight,
-  Wallet, Briefcase, Calendar, ChevronLeft, Shield, Edit2, MessageCircle, MessageSquare, Loader2, ChevronDown, ChevronUp, Calculator as CalcIcon, ClipboardCheck, XCircle, Eye, ArrowUpDown, ArrowLeftRight, Lock, HelpCircle, Download, Trash2, AlertTriangle, PiggyBank, BarChart3, PieChart as PieIcon, ListChecks, Printer, Crown, ShieldAlert
+  Wallet, Briefcase, Calendar, ChevronLeft, Shield, Edit2, MessageCircle, MessageSquare, Loader2, ChevronDown, ChevronUp, Calculator as CalcIcon, ClipboardCheck, XCircle, Eye, ArrowUpDown, ArrowLeftRight, Lock, HelpCircle, Download, Trash2, AlertTriangle, PiggyBank, BarChart3, PieChart as PieIcon, ListChecks, Printer
 } from 'lucide-react';
 import { getCreditRiskInsights, getChatResponse } from './services/geminiService';
 import { 
@@ -345,13 +345,9 @@ const App: React.FC = () => {
   const getBorrowerHealth = (borrowerLoans: Loan[]) => {
     const hasOverdue = borrowerLoans.some(l => l.status === RepaymentStatus.OVERDUE);
     const hasPaid = borrowerLoans.some(l => l.status === RepaymentStatus.PAID);
-    const paidCount = borrowerLoans.filter(l => l.status === RepaymentStatus.PAID).length;
-    const totalCount = borrowerLoans.length;
-
-    if (hasOverdue) return { label: 'At Risk', color: 'bg-rose-50 text-rose-600 border-rose-100', type: 'bad' };
-    if (paidCount === totalCount && totalCount > 0) return { label: 'Trusted', color: 'bg-emerald-50 text-emerald-600 border-emerald-100', type: 'good' };
-    if (hasPaid) return { label: 'Good', color: 'bg-indigo-50 text-indigo-600 border-indigo-100', type: 'neutral' };
-    return { label: 'New', color: 'bg-gray-50 text-gray-500 border-gray-100', type: 'neutral' };
+    if (hasOverdue) return { label: 'At Risk', color: 'bg-rose-50 text-rose-600 border-rose-100' };
+    if (hasPaid) return { label: 'Good', color: 'bg-emerald-50 text-emerald-600 border-emerald-100' };
+    return { label: 'New', color: 'bg-indigo-50 text-indigo-600 border-indigo-100' };
   };
 
   const getAppStatusColor = (status?: ApplicationStatus) => {
@@ -903,101 +899,41 @@ const App: React.FC = () => {
               </div>
             )}
             {activeTab === 'borrowers' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {borrowers.map((borrower) => {
                   const health = getBorrowerHealth(borrower.loans); 
                   const totalPaidByBorrower = borrower.loans.reduce((acc, loan) => {
                     const payment = loan.history.find(h => h.action === 'Full Repayment Received');
                     return acc + (payment?.amount || 0);
                   }, 0);
-                  const activeDebt = borrower.loans.filter(l => l.status !== RepaymentStatus.PAID).reduce((acc, l) => acc + (l.totalRepayment + calculatePenaltyDetails(l).penalty), 0);
 
                   return (
-                    <div 
-                      key={borrower.idNumber} 
-                      className={`group relative p-8 rounded-[40px] border-2 transition-all duration-300 bg-white overflow-hidden cultural-card ${
-                        health.type === 'good' ? 'border-emerald-100 shadow-xl shadow-emerald-500/5 hover:border-emerald-300' :
-                        health.type === 'bad' ? 'border-rose-100 shadow-xl shadow-rose-500/5 hover:border-rose-300' :
-                        'border-gray-100 shadow-sm hover:shadow-md'
-                      }`}
-                    >
+                    <div key={borrower.idNumber} className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card group hover:shadow-xl transition-all">
                       <div className="absolute top-0 right-0 p-4 opacity-5 xhosa-accent-pattern scale-150 group-hover:rotate-45 transition-transform duration-700" />
-                      
-                      {/* Special Record Badges */}
                       <div className="flex items-start justify-between mb-8 relative z-10">
-                        <div className={`w-16 h-16 rounded-[24px] p-[1px] shadow-lg group-hover:scale-110 transition-transform ${
-                          health.type === 'good' ? 'bg-emerald-500' :
-                          health.type === 'bad' ? 'bg-rose-500' : 'bg-indigo-500'
-                        }`}>
-                          <div className="w-full h-full rounded-[23px] bg-white flex items-center justify-center font-black text-xl relative overflow-hidden">
+                        <div className="w-16 h-16 rounded-[24px] bg-gradient-to-tr from-indigo-500 to-indigo-700 p-[1px] shadow-lg group-hover:scale-110 transition-transform">
+                          <div className="w-full h-full rounded-[23px] bg-white flex items-center justify-center font-black text-xl text-indigo-600 relative overflow-hidden">
                             <div className="absolute inset-0 xhosa-pattern opacity-10" />
-                            <span className={health.type === 'good' ? 'text-emerald-600' : health.type === 'bad' ? 'text-rose-600' : 'text-indigo-600'}>
-                              {borrower.name.split(' ').map(n => n[0]).join('')}
-                            </span>
+                            {borrower.name.split(' ').map(n => n[0]).join('')}
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-2">
-                          <div className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-inner ${health.color}`}>
-                            {health.type === 'good' ? <Crown size={12} className="text-emerald-500" /> : 
-                             health.type === 'bad' ? <ShieldAlert size={12} className="animate-pulse" /> : null}
-                            {health.label === 'Trusted' ? 'Trusted Member' : health.label}
-                          </div>
+                          <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-inner ${health.color}`}>{health.label}</span>
                           <button onClick={() => handleEditBorrower(borrower)} className="p-2 bg-gray-50 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm" title="Edit Borrower"><Edit2 size={16} /></button>
                         </div>
                       </div>
-
                       <div className="space-y-6 relative z-10">
                         <div>
                           <h4 className="text-xl font-black text-gray-900 tracking-tight">{borrower.name}</h4>
                           <p className="text-xs text-gray-400 font-bold tracking-widest uppercase flex items-center gap-2 mt-1"><Fingerprint size={12} className="text-indigo-400" /> {borrower.idNumber}</p>
                           <p className="text-xs text-gray-400 font-bold uppercase flex items-center gap-2 mt-1"><MapPin size={12} className="text-indigo-400" /> {borrower.address}</p>
                         </div>
-
-                        {/* Record Highlight Area */}
-                        <div className={`grid grid-cols-2 gap-4 p-4 rounded-3xl border ${
-                          health.type === 'good' ? 'bg-emerald-50/30 border-emerald-50' :
-                          health.type === 'bad' ? 'bg-rose-50/30 border-rose-50' : 'bg-gray-50 border-gray-100'
-                        }`}>
-                          <div>
-                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">History</p>
-                            <p className="font-black text-gray-900">{borrower.loans.length} Loans</p>
-                          </div>
-                          <div>
-                            <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${health.type === 'good' ? 'text-emerald-400' : 'text-gray-400'}`}>Success Rate</p>
-                            <p className={`font-black ${health.type === 'good' ? 'text-emerald-600' : 'text-gray-900'}`}>
-                              {((borrower.loans.filter(l => l.status === RepaymentStatus.PAID).length / (borrower.loans.length || 1)) * 100).toFixed(0)}%
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Financial Snapshot */}
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
-                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Paid</p>
-                            <p className="font-black text-gray-900 font-mono text-sm">R {totalPaidByBorrower.toLocaleString()}</p>
-                          </div>
-                          <div className={`p-4 rounded-3xl border shadow-sm ${activeDebt > 0 ? 'bg-rose-50 border-rose-100 animate-pulse' : 'bg-white border-gray-100'}`}>
-                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Active Debt</p>
-                            <p className={`font-black font-mono text-sm ${activeDebt > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>R {activeDebt.toLocaleString()}</p>
-                          </div>
+                          <div className="bg-gray-50 p-4 rounded-3xl border border-gray-100"><p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{t.totalBorrowerLoans}</p><p className="font-black text-gray-900">{borrower.loans.length}</p></div>
+                          <div className="bg-emerald-50/50 p-4 rounded-3xl border border-emerald-100"><p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">Total Paid</p><p className="font-black text-emerald-600 font-mono">R {totalPaidByBorrower.toLocaleString()}</p></div>
                         </div>
-
-                        <button 
-                          onClick={() => setSelectedBorrowerId(borrower.idNumber)} 
-                          className={`w-full py-4 rounded-[24px] text-xs font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-3 ${
-                            health.type === 'good' ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700' :
-                            health.type === 'bad' ? 'bg-rose-600 text-white border-rose-600 hover:bg-rose-700' :
-                            'bg-[#1a1a1a] text-white border-black hover:bg-black'
-                          }`}
-                        >
-                          <Eye size={16} /> {t.viewHistory}
-                        </button>
+                        <button onClick={() => setSelectedBorrowerId(borrower.idNumber)} className="w-full py-4 bg-gray-50 hover:bg-[#1a1a1a] hover:text-white rounded-[24px] text-xs font-black uppercase tracking-widest transition-all border border-gray-100 flex items-center justify-center gap-3"><Eye size={16} /> {t.viewHistory}</button>
                       </div>
-                      
-                      {/* Good record aesthetic flare */}
-                      {health.type === 'good' && (
-                        <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-emerald-100/30 rounded-full blur-2xl pointer-events-none" />
-                      )}
                     </div>
                   );
                 })}
