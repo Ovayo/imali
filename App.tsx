@@ -1,4 +1,3 @@
-
 import * as React from 'react';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import Layout from './components/Layout';
@@ -12,7 +11,7 @@ import {
   ChevronRight, Sparkles, History, Info, X, Check, User, MapPin, Fingerprint,
   Send, Building2, Smartphone, ShieldCheck, Bell, Mail, Save, Search, Filter,
   Tag, Globe, ExternalLink, Users, Activity, LogOut, ArrowRight,
-  Wallet, Briefcase, Calendar, ChevronLeft, Shield, Edit2, MessageCircle, MessageSquare, Loader2, ChevronDown, ChevronUp, Calculator as CalcIcon, ClipboardCheck, XCircle, Eye, ArrowUpDown, ArrowLeftRight, Lock, HelpCircle, Download, Trash2, AlertTriangle, PiggyBank, BarChart3, PieChart as PieIcon, ListChecks, Printer, Crown, ShieldAlert, Coins
+  Wallet, Briefcase, Calendar, ChevronLeft, Shield, Edit2, MessageCircle, MessageSquare, Loader2, ChevronDown, ChevronUp, Calculator as CalcIcon, ClipboardCheck, XCircle, Eye, ArrowUpDown, ArrowLeftRight, Lock, HelpCircle, Download, Trash2, AlertTriangle, PiggyBank, BarChart3, PieChart as PieIcon, ListChecks, Printer, Crown, ShieldAlert, Coins, Star, Heart
 } from 'lucide-react';
 import { getCreditRiskInsights, getChatResponse } from './services/geminiService';
 import { 
@@ -47,7 +46,6 @@ const App: React.FC = () => {
   const [language, setLanguage] = useState<Language>(Language.EN);
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Persistent State with LocalStorage
   const [loans, setLoans] = useState<Loan[]>(() => {
     const saved = localStorage.getItem('imali_loans_v1');
     return saved ? JSON.parse(saved) : INITIAL_LOANS;
@@ -58,7 +56,6 @@ const App: React.FC = () => {
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null);
   const [editingBorrower, setEditingBorrower] = useState<{ idNumber: string, name: string, address: string, phone: string } | null>(null);
-  const [loanToRemind, setLoanToRemind] = useState<Loan | null>(null);
   const [userRole, setUserRole] = useState<UserRole>(UserRole.LENDER); 
   
   const [aiInsight, setAiInsight] = useState<string | null>(null);
@@ -68,7 +65,6 @@ const App: React.FC = () => {
 
   const t = TRANSLATIONS[language];
 
-  // Helper for Penalties
   const calculatePenaltyDetails = (loan: Loan) => {
     if (loan.status !== RepaymentStatus.OVERDUE) return { penalty: 0, weeks: 0 };
     const dueDate = new Date(loan.dueDate);
@@ -80,13 +76,11 @@ const App: React.FC = () => {
     return { penalty: Math.round(penaltyAmount), weeks: weeksOverdue };
   };
 
-  // Chatbot State
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isChatTyping, setIsChatTyping] = useState(false);
 
-  // Derived Data
   const borrowers = useMemo(() => {
     const map = new Map<string, { idNumber: string, name: string, address: string, phone: string, loans: Loan[] }>();
     loans.forEach(loan => {
@@ -118,6 +112,19 @@ const App: React.FC = () => {
     }, 0);
 
     return { totalLoaned, repaymentRate, overdueCount, activeBorrowers: activeBorrowersCount, totalOutstanding };
+  }, [loans]);
+
+  const statusDistributionData = useMemo(() => {
+    const counts = {
+      [RepaymentStatus.PAID]: loans.filter(l => l.status === RepaymentStatus.PAID).length,
+      [RepaymentStatus.PENDING]: loans.filter(l => l.status === RepaymentStatus.PENDING).length,
+      [RepaymentStatus.OVERDUE]: loans.filter(l => l.status === RepaymentStatus.OVERDUE).length,
+    };
+    return [
+      { name: 'Paid', value: counts[RepaymentStatus.PAID], color: '#10b981' },
+      { name: 'Pending', value: counts[RepaymentStatus.PENDING], color: '#f59e0b' },
+      { name: 'Overdue', value: counts[RepaymentStatus.OVERDUE], color: '#ef4444' },
+    ].filter(item => item.value > 0);
   }, [loans]);
 
   const handleSendChat = async () => {
@@ -201,9 +208,17 @@ const App: React.FC = () => {
     const paidCount = borrowerLoans.filter(l => l.status === RepaymentStatus.PAID).length;
     const totalCount = borrowerLoans.length;
 
-    if (hasOverdue) return { label: 'Action Required', color: 'bg-rose-50 text-rose-600 border-rose-100', type: 'bad' };
-    if (paidCount === totalCount && totalCount > 0) return { label: 'Trusted Member', color: 'bg-emerald-50 text-emerald-600 border-emerald-100', type: 'good' };
-    return { label: 'Good Standing', color: 'bg-indigo-50 text-indigo-600 border-indigo-100', type: 'neutral' };
+    if (hasOverdue) return { label: 'Action Required', color: 'bg-rose-50 text-rose-600 border-rose-100', type: 'bad', icon: AlertTriangle };
+    
+    if (paidCount === totalCount && totalCount >= 3) {
+      return { label: 'Elite Member', color: 'bg-amber-50 text-amber-600 border-amber-200 shadow-amber-500/10', type: 'elite', icon: Crown };
+    }
+    
+    if (paidCount === totalCount && totalCount > 0) {
+      return { label: 'Trusted Member', color: 'bg-emerald-50 text-emerald-600 border-emerald-100 shadow-emerald-500/10', type: 'good', icon: CheckCircle2 };
+    }
+    
+    return { label: 'Good Standing', color: 'bg-indigo-50 text-indigo-600 border-indigo-100', type: 'neutral', icon: ShieldCheck };
   };
 
   useEffect(() => {
@@ -212,7 +227,6 @@ const App: React.FC = () => {
 
   const SummaryCard = ({ title, value, icon: Icon, colorClass }: any) => (
     <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm relative overflow-hidden cultural-card group hover:shadow-lg transition-all">
-      <div className="absolute top-0 right-0 p-1 opacity-5 xhosa-pattern-sm" />
       <div className="flex items-center justify-between relative z-10">
         <div className={`p-4 rounded-2xl ${colorClass} shadow-sm group-hover:scale-110 transition-transform`}>
           <Icon size={24} />
@@ -305,6 +319,71 @@ const App: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden relative">
+                <div className="absolute top-0 right-0 p-4 opacity-5 xhosa-accent-pattern scale-150" />
+                <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-8 flex items-center gap-2">
+                  <PieIcon size={18} className="text-indigo-600" />
+                  Loan Status Distribution
+                </h3>
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={statusDistributionData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                        animationDuration={1500}
+                      >
+                        {statusDistributionData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '1.5rem', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', padding: '1rem' }}
+                      />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        align="center"
+                        iconType="circle"
+                        formatter={(value) => <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest">{value}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden relative">
+                <div className="absolute top-0 right-0 p-4 opacity-5 xhosa-accent-pattern scale-150" />
+                <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-8 flex items-center gap-2">
+                  <Activity size={18} className="text-indigo-600" />
+                  Recent Ledger Entries
+                </h3>
+                <div className="space-y-4 max-h-72 overflow-y-auto custom-scrollbar pr-2">
+                  {loans.slice(-10).reverse().map((loan, idx) => (
+                    <div key={loan.id + idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-indigo-100 transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-xl bg-white shadow-sm`}>
+                          <StatusDot status={loan.status} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-gray-900">{loan.borrowerName}</p>
+                          <p className="text-[9px] text-gray-400 font-bold uppercase">{loan.id} • R {loan.amountLoaned.toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-black text-gray-900">{loan.startDate}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -329,42 +408,68 @@ const App: React.FC = () => {
               {borrowers.filter(b => b.name.toLowerCase().includes(searchTerm.toLowerCase())).map((borrower) => {
                 const health = getBorrowerHealth(borrower.loans);
                 const activeDebt = borrower.loans.filter(l => l.status !== RepaymentStatus.PAID).reduce((acc, l) => acc + (l.totalRepayment + calculatePenaltyDetails(l).penalty), 0);
+                const HealthIcon = health.icon;
+                const isElite = health.type === 'elite';
+                const isGood = health.type === 'good';
                 
                 return (
-                  <div key={borrower.idNumber} className={`group bg-white p-8 rounded-[3rem] border-2 transition-all duration-300 relative overflow-hidden cultural-card ${health.type === 'good' ? 'border-emerald-100 shadow-xl shadow-emerald-500/5' : health.type === 'bad' ? 'border-rose-100 shadow-xl shadow-rose-500/5' : 'border-gray-50 shadow-sm'}`}>
+                  <div key={borrower.idNumber} className={`group bg-white p-8 rounded-[3rem] border-2 transition-all duration-300 relative overflow-hidden cultural-card ${
+                    isElite ? 'border-amber-200 shadow-xl shadow-amber-500/10' : 
+                    isGood ? 'border-emerald-100 shadow-xl shadow-emerald-500/10' : 
+                    health.type === 'bad' ? 'border-rose-100 shadow-xl shadow-rose-500/10' : 
+                    'border-gray-50 shadow-sm'
+                  }`}>
                     <div className="absolute top-0 right-0 p-4 opacity-[0.03] xhosa-accent-pattern scale-150 group-hover:rotate-12 transition-transform" />
-                    <div className="flex items-start justify-between mb-8">
-                      <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center font-black text-2xl text-white shadow-lg relative overflow-hidden group-hover:scale-110 transition-transform ${health.type === 'good' ? 'bg-emerald-600' : health.type === 'bad' ? 'bg-rose-600' : 'bg-indigo-600'}`}>
+                    
+                    <div className="flex items-start justify-between mb-8 relative z-10">
+                      <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center font-black text-2xl text-white shadow-lg relative overflow-hidden group-hover:scale-110 transition-transform ${
+                        isElite ? 'bg-amber-600' : 
+                        isGood ? 'bg-emerald-600' : 
+                        health.type === 'bad' ? 'bg-rose-600' : 
+                        'bg-indigo-600'
+                      }`}>
                         <div className="absolute inset-0 xhosa-pattern opacity-10" />
                         {borrower.name.split(' ').map(n => n[0]).join('')}
                       </div>
-                      <div className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm ${health.color}`}>
+                      <div className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm flex items-center gap-1.5 ${health.color}`}>
+                        <HealthIcon size={12} className={health.type === 'bad' ? 'animate-pulse' : ''} />
                         {health.label}
                       </div>
                     </div>
-                    <div className="space-y-6">
+
+                    <div className="space-y-6 relative z-10">
                       <div>
-                        <h4 className="text-xl font-black text-gray-900 tracking-tight leading-none mb-1">{borrower.name}</h4>
+                        <h4 className="text-xl font-black text-gray-900 tracking-tight leading-none mb-1 flex items-center gap-2">
+                          {borrower.name}
+                          {isElite && <Crown size={16} className="text-amber-500" />}
+                          {isGood && <CheckCircle2 size={16} className="text-emerald-500" />}
+                        </h4>
                         <div className="flex flex-wrap gap-x-4 gap-y-1">
                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest flex items-center gap-1"><Smartphone size={10} className="text-indigo-400" /> {borrower.phone}</p>
                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest flex items-center gap-1"><Fingerprint size={10} className="text-indigo-400" /> {borrower.idNumber}</p>
                         </div>
                       </div>
+
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-gray-50/50 p-4 rounded-3xl border border-gray-100 shadow-inner">
+                        <div className="bg-gray-50/50 p-4 rounded-3xl border border-gray-100 shadow-inner group-hover:bg-white transition-colors">
                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Portfolio</p>
                           <p className="font-black text-gray-900">{borrower.loans.length} Loans</p>
                         </div>
-                        <div className={`p-4 rounded-3xl border shadow-inner ${activeDebt > 0 ? 'bg-rose-50/50 border-rose-100' : 'bg-emerald-50/50 border-emerald-100'}`}>
+                        <div className={`p-4 rounded-3xl border shadow-inner transition-colors ${activeDebt > 0 ? 'bg-rose-50/50 border-rose-100' : 'bg-emerald-50/50 border-emerald-100'}`}>
                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Active Debt</p>
                           <p className={`font-black font-mono ${activeDebt > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>R {activeDebt.toLocaleString()}</p>
                         </div>
                       </div>
+
                       <div className="flex gap-3 pt-2">
-                        <button onClick={() => setSelectedBorrowerId(borrower.idNumber)} className="flex-1 py-4 bg-gray-50 text-gray-900 border border-gray-100 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-100 transition-all flex items-center justify-center gap-2">
-                          <Eye size={14} /> View History
+                        <button onClick={() => setSelectedBorrowerId(borrower.idNumber)} className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${
+                          isElite ? 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100' : 
+                          isGood ? 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100' : 
+                          'bg-gray-50 text-gray-900 border-gray-100 hover:bg-gray-100'
+                        }`}>
+                          <Eye size={14} /> Profile History
                         </button>
-                        <button onClick={() => { setEditingBorrower({ idNumber: borrower.idNumber, name: borrower.name, address: borrower.address, phone: borrower.phone }); setIsEditBorrowerModalOpen(true); }} className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl hover:bg-indigo-100 transition-all border border-indigo-100">
+                        <button onClick={() => { setEditingBorrower({ idNumber: borrower.idNumber, name: borrower.name, address: borrower.address, phone: borrower.phone }); setIsEditBorrowerModalOpen(true); }} className="p-4 bg-white text-gray-400 rounded-2xl hover:text-indigo-600 transition-all border border-gray-100 shadow-sm">
                           <Edit2 size={16} />
                         </button>
                       </div>
@@ -423,7 +528,7 @@ const App: React.FC = () => {
                           <span className={`text-xs font-bold ${loan.status === RepaymentStatus.OVERDUE ? 'text-rose-600' : 'text-gray-600'}`}>{loan.dueDate}</span>
                         </div>
                       </td>
-                      <td className="px-8 py-6">
+                      <td className="px-8 py-6 text-center">
                         <StatusDot status={loan.status} />
                       </td>
                       <td className="px-8 py-6 text-center">
@@ -439,16 +544,14 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Other Tabs */}
         {['calculator', 'settings'].includes(activeTab) && (
           <div className="flex flex-col items-center justify-center p-24 bg-white rounded-[3rem] border-2 border-dashed border-gray-100 text-gray-300">
             <Clock size={64} className="mb-6 opacity-20" />
-            <h3 className="text-xl font-black uppercase tracking-[0.2em]">Section Under Construction</h3>
+            <h3 className="text-xl font-black uppercase tracking-[0.2em]">Under Construction</h3>
           </div>
         )}
       </div>
 
-      {/* Chat Assistant */}
       {!isChatOpen && (
         <button 
           onClick={() => setIsChatOpen(true)}
@@ -509,7 +612,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Edit Borrower Modal */}
       {isEditBorrowerModalOpen && editingBorrower && (
         <div className="fixed inset-0 z-[250] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
@@ -559,7 +661,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Profile/History Modal */}
       {selectedBorrowerId && (
         <div className="fixed inset-0 z-[250] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 relative flex flex-col max-h-[90vh]">
@@ -651,7 +752,7 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </Layout>
   );
 };
 
