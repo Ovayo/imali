@@ -52,21 +52,6 @@ const App: React.FC = () => {
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   const [isSendingNotifications, setIsSendingNotifications] = useState(false);
 
-  // Background Rotation State
-  const [bgIndex, setBgIndex] = useState(0);
-  const bgImages = [
-    'https://images.unsplash.com/photo-1523805009345-7448845a9e53?q=80&w=1200&auto=format&fit=crop', // Xhosa Cultural
-    'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200&auto=format&fit=crop', // Coastal/Beach
-    'https://images.unsplash.com/photo-1566121315132-d3927f39424b?q=80&w=1200&auto=format&fit=crop'  // Historic/City
-  ];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setBgIndex((prev) => (prev + 1) % bgImages.length);
-    }, 6000);
-    return () => clearInterval(interval);
-  }, []);
-
   useEffect(() => {
     localStorage.setItem('imali_loans_v1', JSON.stringify(loans));
   }, [loans]);
@@ -542,15 +527,7 @@ const App: React.FC = () => {
 
               {userRole === UserRole.BORROWER && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mt-6 md:mt-8">
-                  <div className="bg-indigo-900 p-6 md:p-8 rounded-[2.5rem] md:rounded-[40px] text-white shadow-2xl relative overflow-hidden group min-h-[300px] md:min-h-[350px] flex flex-col justify-between transition-all duration-500 hover:shadow-indigo-500/20">
-                    <div 
-                      className="absolute inset-0 opacity-70 mix-blend-multiply bg-cover bg-center transition-all duration-[2000ms] group-hover:scale-105" 
-                      style={{ 
-                        backgroundImage: `url('${bgImages[bgIndex]}')`,
-                        transition: 'background-image 1.5s ease-in-out'
-                      }} 
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-indigo-900/90 via-indigo-900/20 to-transparent pointer-events-none" />
+                  <div className="bg-emerald-600 p-6 md:p-8 rounded-[2.5rem] md:rounded-[40px] text-white shadow-2xl relative overflow-hidden group min-h-[300px] md:min-h-[350px] flex flex-col justify-between transition-all duration-500 hover:shadow-emerald-500/20">
                     <div className="absolute inset-0 opacity-15 xhosa-accent-pattern scale-150 rotate-12 pointer-events-none" />
                     <div className="relative z-10 flex flex-col justify-between h-full gap-6 md:gap-8">
                       <div>
@@ -560,9 +537,9 @@ const App: React.FC = () => {
                           </div>
                         </div>
                         <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tight leading-none drop-shadow-md">Financial Wellbeing</h3>
-                        <p className="text-indigo-50 max-w-xl mt-3 md:mt-4 font-medium text-base md:text-lg leading-relaxed drop-shadow-sm">Your consistent repayment history strengthens your community trust score.</p>
+                        <p className="text-emerald-50 max-w-xl mt-3 md:mt-4 font-medium text-base md:text-lg leading-relaxed drop-shadow-sm">Your consistent repayment history strengthens your community trust score.</p>
                       </div>
-                      <button onClick={() => setIsAddModalOpen(true)} className="bg-white text-indigo-800 w-full py-4 md:py-5 rounded-[1.5rem] md:rounded-[24px] font-black text-xs md:text-sm uppercase tracking-widest shadow-2xl hover:bg-indigo-50 active:scale-95 transition-all flex items-center justify-center gap-3">New Loan Request</button>
+                      <button onClick={() => setIsAddModalOpen(true)} className="bg-white text-emerald-800 w-full py-4 md:py-5 rounded-[1.5rem] md:rounded-[24px] font-black text-xs md:text-sm uppercase tracking-widest shadow-2xl hover:bg-emerald-50 active:scale-95 transition-all flex items-center justify-center gap-3">New Loan Request</button>
                     </div>
                   </div>
                   <div className="bg-white p-6 md:p-8 rounded-[2.5rem] md:rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card">
