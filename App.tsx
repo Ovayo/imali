@@ -36,8 +36,7 @@ const App: React.FC = () => {
   const [isEditBorrowerModalOpen, setIsEditBorrowerModalOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null);
-  const [editingBorrower, setEditingBorrower] = useState<{ idNumber: string, name: string, address: string, phone: string, email?: string } | null>(null);
-  const [loanToRemind, setLoanToRemind] = useState<Loan | null>(null);
+  const [editingBorrower, setEditingBorrower] = useState<{ idNumber: string, name: string, address: string, phone: string, email: string } | null>(null);
   const [userRole, setUserRole] = useState<UserRole>(UserRole.LENDER); 
   
   useEffect(() => {
@@ -46,18 +45,10 @@ const App: React.FC = () => {
 
   const [loanSortKey, setLoanSortKey] = useState<'date' | 'amount' | 'status'>('date');
   const [loanSortOrder, setLoanSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [borrowerSortKey, setBorrowerSortKey] = useState<'date' | 'status'>('date');
-  const [borrowerSortOrder, setBorrowerSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [isLoadingAi, setIsLoadingAi] = useState(false);
   const [showToast, setShowToast] = useState<string | null>(null);
-  const [appSubmitted, setAppSubmitted] = useState(false);
-  const [applicationStep, setApplicationStep] = useState(0); 
-
-  const [trackingId, setTrackingId] = useState('');
-  const [trackingResult, setTrackingResult] = useState<Loan | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
 
   const [calcAmount, setCalcAmount] = useState<number>(1000);
   const [calcInterest, setCalcInterest] = useState<number>(DEFAULT_INTEREST_RATE);
@@ -119,10 +110,8 @@ const App: React.FC = () => {
       if (l.status === RepaymentStatus.OVERDUE) score -= 100;
       if (l.status === RepaymentStatus.DEFAULTED) score -= 250;
     });
-    // Add bonus for volume of completed loans
     const completed = borrowerLoans.filter(l => l.status === RepaymentStatus.PAID).length;
     if (completed > 5) score += 50;
-    
     return Math.min(850, Math.max(300, score));
   };
 
@@ -141,7 +130,7 @@ const App: React.FC = () => {
           name: loan.borrowerName, 
           address: loan.physicalAddress,
           phone: loan.borrowerNumber,
-          email: loan.idNumber.substring(0, 5) + '@biz.co.za', // Placeholder email logic
+          email: loan.idNumber.substring(0, 5) + '@biz.co.za',
           loans: [],
           score: 0
         });
@@ -184,21 +173,6 @@ const App: React.FC = () => {
 
     return { monthlyData, statusData };
   }, [loans]);
-
-  const exportToCSV = () => {
-    const headers = ['Transaction ID', 'Borrower Name', 'ID Number', 'Mobile', 'Amount', 'Interest %', 'Due Date', 'Status', 'Total Repayment'];
-    const rows = loans.map(l => [l.id, l.borrowerName, l.idNumber, l.borrowerNumber, l.amountLoaned, l.interestRate, l.dueDate, l.status, l.totalRepayment + calculatePenaltyDetails(l).penalty]);
-    const csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\n" + rows.map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `imali_ledger_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setShowToast('Ledger exported to CSV!');
-    setTimeout(() => setShowToast(null), 3000);
-  };
 
   const handleRefresh = async () => {
     await new Promise(resolve => setTimeout(resolve, 1200));
@@ -280,8 +254,41 @@ const App: React.FC = () => {
     setTimeout(() => setShowToast(null), 3000);
   };
 
+  const handleEditBorrower = (borrower: any) => {
+    setEditingBorrower({
+      idNumber: borrower.idNumber,
+      name: borrower.name,
+      address: borrower.address,
+      phone: borrower.phone,
+      email: borrower.email
+    });
+    setIsEditBorrowerModalOpen(true);
+  };
+
+  const handleSaveBorrowerChanges = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBorrower) return;
+
+    setLoans(prev => prev.map(l => {
+      if (l.idNumber === editingBorrower.idNumber) {
+        return {
+          ...l,
+          borrowerName: editingBorrower.name,
+          borrowerNumber: editingBorrower.phone,
+          physicalAddress: editingBorrower.address
+        };
+      }
+      return l;
+    }));
+
+    setIsEditBorrowerModalOpen(false);
+    setEditingBorrower(null);
+    setShowToast(language === Language.XH ? 'Iinkcukacha zihlaziyiwe!' : 'Borrower details updated!');
+    setTimeout(() => setShowToast(null), 3000);
+  };
+
   const handleCreateNewLoanForBorrower = (borrower: any) => {
-    setSelectedBorrowerId(null); // Close borrower history
+    setSelectedBorrowerId(null);
     setNewLoan({
       borrowerName: borrower.name,
       idNumber: borrower.idNumber,
@@ -426,7 +433,9 @@ const App: React.FC = () => {
                          <div className={`px-4 py-2 rounded-xl border-2 font-black text-[12px] flex items-center gap-2 shadow-sm ${scoreColor}`}>
                             <Zap size={14} className="fill-current" /> {borrower.score}
                          </div>
-                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{borrower.score >= 700 ? 'Platinum' : borrower.score >= 550 ? 'Gold' : 'Basic'}</p>
+                         <div className="flex gap-2">
+                            <button onClick={() => handleEditBorrower(borrower)} className="p-2 bg-gray-50 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all border border-gray-100 shadow-sm"><Edit2 size={14} /></button>
+                         </div>
                       </div>
                     </div>
                     <div className="space-y-6 relative z-10">
@@ -479,7 +488,28 @@ const App: React.FC = () => {
         </div>
       </Layout>
 
-      {/* DETAIL MODALS */}
+      {/* EDIT BORROWER MODAL */}
+      {isEditBorrowerModalOpen && editingBorrower && (
+        <div className="fixed inset-0 z-[250] bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
+           <div className="bg-white w-full max-w-xl rounded-[4rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 relative flex flex-col">
+              <div className="bg-[#1a1a1a] p-12 text-white flex justify-between items-center shrink-0">
+                 <div><p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Data Maintenance</p><h3 className="text-3xl font-black tracking-tighter uppercase">{t.editBorrower}</h3></div>
+                 <button onClick={() => setIsEditBorrowerModalOpen(false)} className="p-4 hover:bg-white/10 rounded-full border border-white/10"><X size={28} /></button>
+              </div>
+              <form onSubmit={handleSaveBorrowerChanges} className="p-12 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
+                 <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-4">{t.fullName}</label><input required value={editingBorrower.name} onChange={e => setEditingBorrower({...editingBorrower, name: e.target.value})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-900 shadow-inner" /></div>
+                 <div className="grid grid-cols-2 gap-8">
+                    <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-4">ID Number</label><input disabled value={editingBorrower.idNumber} className="w-full px-8 py-5 bg-gray-100 border-none rounded-3xl font-bold text-gray-400 font-mono shadow-inner cursor-not-allowed opacity-60" /></div>
+                    <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-4">Mobile</label><input required value={editingBorrower.phone} onChange={e => setEditingBorrower({...editingBorrower, phone: e.target.value})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-900 font-mono shadow-inner" /></div>
+                 </div>
+                 <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-4">Physical Address</label><textarea required value={editingBorrower.address} onChange={e => setEditingBorrower({...editingBorrower, address: e.target.value})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-900 shadow-inner h-24 resize-none" /></div>
+                 <button type="submit" className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3"><Save size={18} /> {t.saveChanges}</button>
+              </form>
+           </div>
+        </div>
+      )}
+
+      {/* BORROWER DETAIL MODAL */}
       {selectedBorrowerId && (
         <div className="fixed inset-0 z-[250] bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
            <div className="bg-white w-full max-w-2xl rounded-[4rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 relative flex flex-col max-h-[90vh]">
@@ -493,7 +523,6 @@ const App: React.FC = () => {
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto p-12 space-y-10 custom-scrollbar">
-                {/* Score Section */}
                 <div className={`p-8 rounded-[2.5rem] border-2 flex items-center justify-between ${getScoreColor(borrowers.find(b => b.idNumber === selectedBorrowerId)?.score || 550)}`}>
                    <div className="flex items-center gap-5">
                       <Zap size={40} className="fill-current" />
@@ -502,7 +531,6 @@ const App: React.FC = () => {
                    <div className="text-right"><p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70">Status Motif</p><p className="font-black uppercase tracking-widest text-lg">{borrowers.find(b => b.idNumber === selectedBorrowerId)?.score >= 700 ? 'Platinum Trust' : 'Active Steady'}</p></div>
                 </div>
 
-                {/* Contact Bar */}
                 <div className="bg-gray-50 p-8 rounded-[2.5rem] flex items-center justify-between border border-gray-100 shadow-inner">
                    <div className="flex items-center gap-4">
                       <div className="p-3 bg-white rounded-xl shadow-sm text-indigo-600"><Smartphone size={24} /></div>
@@ -514,7 +542,6 @@ const App: React.FC = () => {
                    </div>
                 </div>
 
-                {/* Action Row */}
                 <button onClick={() => handleCreateNewLoanForBorrower(borrowers.find(b => b.idNumber === selectedBorrowerId))} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl flex items-center justify-center gap-4 hover:bg-indigo-700 active:scale-95 transition-all"><Plus size={24} /> Apply for New Loan Account</button>
                 
                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] border-b border-gray-100 pb-4">Transaction Motif History</h4>
@@ -552,7 +579,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Detail Loan Modal */}
+      {/* DETAIL LOAN MODAL */}
       {selectedLoan && (
         <div className="fixed inset-0 z-[250] bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
            <div className="bg-white w-full max-w-xl rounded-[4rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 relative flex flex-col">
