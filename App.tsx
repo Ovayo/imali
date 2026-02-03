@@ -13,7 +13,7 @@ import {
   ChevronRight, Sparkles, History, Info, X, Check, User, MapPin, Fingerprint,
   Send, Building2, Smartphone, ShieldCheck, Bell, Mail, Save, Search, Filter,
   Tag, Globe, ExternalLink, Users, Activity, LogOut, ArrowRight,
-  Wallet, Briefcase, Calendar, ChevronLeft, Shield, Edit2, MessageCircle, MessageSquare, Loader2, ChevronDown, ChevronUp, Calculator as CalcIcon, ClipboardCheck, XCircle, Eye, ArrowUpDown, ArrowLeftRight, Lock, HelpCircle, Download, Trash2, AlertTriangle, PiggyBank, BarChart3, PieChart as PieIcon, Zap, Crown, UserCircle, MailCheck, Share2, ReceiptText
+  Wallet, Briefcase, Calendar, ChevronLeft, Shield, Edit2, MessageCircle, MessageSquare, Loader2, ChevronDown, ChevronUp, Calculator as CalcIcon, ClipboardCheck, XCircle, Eye, ArrowUpDown, ArrowLeftRight, Lock, HelpCircle, Download, Trash2, AlertTriangle, PiggyBank, BarChart3, PieChart as PieIcon, Zap, Crown, UserCircle, MailCheck, Share2, ReceiptText, Key, SearchCode
 } from 'lucide-react';
 import { getCreditRiskInsights, getChatResponse } from './services/geminiService';
 import { 
@@ -29,8 +29,11 @@ const App: React.FC = () => {
   const [language, setLanguage] = useState<Language>(Language.EN);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [userRole, setUserRole] = useState<UserRole>(UserRole.LENDER); 
+  const [loggedInBorrowerId, setLoggedInBorrowerId] = useState<string | null>(null);
+  const [showRegisterForm, setShowRegisterForm] = useState(false);
+  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginError, setLoginError] = useState<string | null>(null);
   
-  const CURRENT_BORROWER_ID = '9201010001081';
   const LENDER_EMAIL = 'montiovayo@gmail.com';
 
   const [loans, setLoans] = useState<Loan[]>(() => {
@@ -188,7 +191,7 @@ const App: React.FC = () => {
   }, [loans]);
 
   const currentBorrowerCity = useMemo(() => {
-    const currentBorrower = borrowers.find(b => b.idNumber === CURRENT_BORROWER_ID);
+    const currentBorrower = borrowers.find(b => b.idNumber === loggedInBorrowerId);
     if (!currentBorrower) return "South Africa";
     
     const addr = currentBorrower.address.toLowerCase();
@@ -202,19 +205,19 @@ const App: React.FC = () => {
     
     const parts = currentBorrower.address.split(',');
     return parts[0].trim();
-  }, [borrowers]);
+  }, [borrowers, loggedInBorrowerId]);
 
   const currentUserEmail = useMemo(() => {
     if (userRole === UserRole.LENDER) return LENDER_EMAIL;
-    const currentBorrower = borrowers.find(b => b.idNumber === CURRENT_BORROWER_ID);
+    const currentBorrower = borrowers.find(b => b.idNumber === loggedInBorrowerId);
     return currentBorrower?.email || 'my-account@imali.co.za';
-  }, [userRole, borrowers]);
+  }, [userRole, borrowers, loggedInBorrowerId]);
 
   const filteredAndSortedLoans = useMemo(() => {
     let baseLoans = [...loans];
     
     if (userRole === UserRole.BORROWER) {
-      baseLoans = baseLoans.filter(l => l.idNumber === CURRENT_BORROWER_ID);
+      baseLoans = baseLoans.filter(l => l.idNumber === loggedInBorrowerId);
     }
 
     const filtered = baseLoans.filter(loan => {
@@ -230,17 +233,17 @@ const App: React.FC = () => {
       else comparison = a.status.localeCompare(b.status);
       return loanSortOrder === 'asc' ? comparison : -comparison;
     });
-  }, [loans, searchTerm, statusFilter, loanSortKey, loanSortOrder, userRole]);
+  }, [loans, searchTerm, statusFilter, loanSortKey, loanSortOrder, userRole, loggedInBorrowerId]);
 
   const activeLoansForDashboard = useMemo(() => {
     const relevant = userRole === UserRole.BORROWER 
-      ? loans.filter(l => l.idNumber === CURRENT_BORROWER_ID)
+      ? loans.filter(l => l.idNumber === loggedInBorrowerId)
       : loans;
     return relevant.filter(l => l.status === RepaymentStatus.PENDING || l.status === RepaymentStatus.OVERDUE).slice(0, 4);
-  }, [loans, userRole]);
+  }, [loans, userRole, loggedInBorrowerId]);
 
   const chartData = useMemo(() => {
-    const relevantLoans = userRole === UserRole.LENDER ? loans : loans.filter(l => l.idNumber === CURRENT_BORROWER_ID);
+    const relevantLoans = userRole === UserRole.LENDER ? loans : loans.filter(l => l.idNumber === loggedInBorrowerId);
     
     const monthlyMap = new Map<string, number>();
     relevantLoans.forEach(loan => {
@@ -268,17 +271,17 @@ const App: React.FC = () => {
     ].filter(item => item.value > 0);
 
     return { monthlyData, statusData };
-  }, [loans, userRole]);
+  }, [loans, userRole, loggedInBorrowerId]);
 
   const stats = useMemo(() => {
-    const relevantLoans = userRole === UserRole.LENDER ? loans : loans.filter(l => l.idNumber === CURRENT_BORROWER_ID);
+    const relevantLoans = userRole === UserRole.LENDER ? loans : loans.filter(l => l.idNumber === loggedInBorrowerId);
     const totalLoaned = relevantLoans.reduce((acc, l) => acc + l.amountLoaned, 0);
     const paidCount = relevantLoans.filter(l => l.status === RepaymentStatus.PAID).length;
     const repaymentRate = relevantLoans.length > 0 ? (paidCount / relevantLoans.length) * 100 : 0;
     const overdueCount = relevantLoans.filter(l => l.status === RepaymentStatus.OVERDUE).length;
     const score = userRole === UserRole.BORROWER ? calculateCreditScore(relevantLoans) : new Set(relevantLoans.map(l => l.idNumber)).size;
     return { totalLoaned, repaymentRate, overdueCount, score };
-  }, [loans, userRole]);
+  }, [loans, userRole, loggedInBorrowerId]);
 
   const handleRefresh = async () => {
     await new Promise(resolve => setTimeout(resolve, 1200));
@@ -366,30 +369,6 @@ const App: React.FC = () => {
     setTimeout(() => setShowToast(null), 3000);
   };
 
-  const handleAddLoan = (e: React.FormEvent) => {
-    e.preventDefault();
-    const id = `TXN-${Math.floor(1000 + Math.random() * 9000)}`;
-    const amount = newLoan.amountLoaned || 0;
-    const interest = (amount * DEFAULT_INTEREST_RATE) / 100;
-    const loan: Loan = {
-      ...newLoan as Loan,
-      id,
-      interestRate: DEFAULT_INTEREST_RATE,
-      penaltyRate: DEFAULT_PENALTY_RATE,
-      totalRepayment: amount + interest,
-      startDate: new Date().toISOString().split('T')[0],
-      dueDate: newLoan.dueDate || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      status: RepaymentStatus.PENDING,
-      applicationStatus: ApplicationStatus.APPROVED,
-      history: [{ date: new Date().toISOString().split('T')[0], action: 'Account Created', amount }]
-    };
-    setLoans(prev => [...prev, loan]);
-    setIsAddModalOpen(false);
-    setShowToast('New account created!');
-    setNewLoan({ borrowerName: '', idNumber: '', physicalAddress: '', borrowerNumber: '', amountLoaned: 0, dueDate: '', payoutMethod: PayoutMethod.MOBILE, notes: '' });
-    setTimeout(() => setShowToast(null), 3000);
-  };
-
   const handleEditBorrower = (borrower: any) => {
     setEditingBorrower({
       idNumber: borrower.idNumber,
@@ -418,6 +397,61 @@ const App: React.FC = () => {
     setIsEditBorrowerModalOpen(false);
     setEditingBorrower(null);
     setShowToast(language === Language.XH ? 'Iinkcukacha zihlaziyiwe!' : 'Borrower details updated!');
+    setTimeout(() => setShowToast(null), 3000);
+  };
+
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    const identifier = loginIdentifier.trim().toLowerCase();
+    
+    const borrower = borrowers.find(b => 
+      b.idNumber.toLowerCase() === identifier || 
+      b.phone.replace(/\s+/g, '') === identifier.replace(/\s+/g, '')
+    );
+
+    if (borrower) {
+      setLoggedInBorrowerId(borrower.idNumber);
+      setLoginIdentifier('');
+      setShowToast(language === Language.XH ? `Wamkelekile, ${borrower.name}!` : `Welcome back, ${borrower.name}!`);
+    } else {
+      setLoginError(language === Language.XH ? 'Iinkcukacha azifumaneki. Khangela kwakhona.' : 'No account found with these details.');
+    }
+    setTimeout(() => setShowToast(null), 3000);
+  };
+
+  const handleRegisterBorrower = (e: React.FormEvent) => {
+    e.preventDefault();
+    const existing = borrowers.find(b => b.idNumber === newLoan.idNumber);
+    if (existing) {
+       setLoginError(language === Language.XH ? 'Le ID sele ibhaliswe.' : 'This ID is already registered.');
+       return;
+    }
+
+    const id = `TXN-NEW-${Math.floor(1000 + Math.random() * 9000)}`;
+    const regBorrower: Loan = {
+      id,
+      borrowerName: newLoan.borrowerName || 'New User',
+      idNumber: newLoan.idNumber || '',
+      physicalAddress: newLoan.physicalAddress || '',
+      borrowerNumber: newLoan.borrowerNumber || '',
+      payoutMethod: PayoutMethod.MOBILE,
+      amountLoaned: 0,
+      interestRate: DEFAULT_INTEREST_RATE,
+      penaltyRate: DEFAULT_PENALTY_RATE,
+      totalRepayment: 0,
+      startDate: new Date().toISOString().split('T')[0],
+      dueDate: new Date().toISOString().split('T')[0],
+      status: RepaymentStatus.PAID, 
+      applicationStatus: ApplicationStatus.APPROVED,
+      notes: 'Registration Account',
+      history: [{ date: new Date().toISOString().split('T')[0], action: 'Profile Registered', amount: 0 }]
+    };
+    setLoans(prev => [...prev, regBorrower]);
+    setLoggedInBorrowerId(regBorrower.idNumber);
+    setShowRegisterForm(false);
+    setNewLoan({ borrowerName: '', idNumber: '', physicalAddress: '', borrowerNumber: '' });
+    setShowToast(language === Language.XH ? 'Ibhaliswe ngempumelelo!' : 'Registered successfully!');
     setTimeout(() => setShowToast(null), 3000);
   };
 
@@ -450,6 +484,13 @@ const App: React.FC = () => {
     const response = await getChatResponse(chatHistory, userMsg.text);
     setChatHistory(prev => [...prev, { role: 'model', text: response }]);
     setIsChatTyping(false);
+  };
+
+  const handleLogout = () => {
+    setLoggedInBorrowerId(null);
+    setShowRegisterForm(false);
+    setLoginIdentifier('');
+    setLoginError(null);
   };
 
   const StatusDot = ({ status }: { status: RepaymentStatus }) => {
@@ -488,9 +529,129 @@ const App: React.FC = () => {
     </div>
   );
 
+  // BORROWER ENTRY VIEW (PRIVACY-FIRST)
+  if (userRole === UserRole.BORROWER && !loggedInBorrowerId) {
+    return (
+      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center p-6 relative overflow-hidden">
+         <div className="absolute inset-0 opacity-[0.03] pointer-events-none xhosa-pattern rotate-45 scale-150" />
+         <div className="bead-accent absolute top-0 left-0 w-full opacity-50" />
+         
+         <div className="w-full max-w-md space-y-12 relative z-10">
+            <div className="text-center">
+               <div className="inline-block bg-indigo-600 p-4 rounded-[2rem] shadow-2xl mb-6 border border-white/10 rotate-6">
+                  <Wallet size={48} className="text-white" />
+               </div>
+               <h1 className="text-6xl font-black text-white tracking-tighter uppercase mb-2">imali</h1>
+               <p className="text-indigo-400 font-black uppercase tracking-[0.4em] text-xs">Secure Borrower Portal</p>
+            </div>
+
+            <div className="bg-white rounded-[3rem] p-10 shadow-2xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+               {!showRegisterForm ? (
+                  <form onSubmit={handleLoginSubmit} className="space-y-6">
+                     <div className="space-y-2">
+                        <h2 className="text-2xl font-black text-gray-900 tracking-tight">Find My Account</h2>
+                        <p className="text-sm text-gray-500 font-medium leading-relaxed">Enter your ID number or Mobile number to access your secure dashboard.</p>
+                     </div>
+
+                     <div className="space-y-4">
+                        <div className="relative group">
+                           <Fingerprint size={20} className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" />
+                           <input 
+                             required 
+                             placeholder="ID or Mobile Number" 
+                             value={loginIdentifier} 
+                             onChange={e => setLoginIdentifier(e.target.value)}
+                             className="w-full pl-16 pr-6 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-900 shadow-inner tracking-wide" 
+                           />
+                        </div>
+                        {loginError && (
+                           <div className="px-6 py-3 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                              <AlertCircle size={16} className="text-rose-500" />
+                              <p className="text-xs font-bold text-rose-600">{loginError}</p>
+                           </div>
+                        )}
+                     </div>
+
+                     <button type="submit" className="w-full py-5 bg-[#1a1a1a] text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-3">
+                        <Key size={20} /> Access Portal
+                     </button>
+
+                     <div className="pt-6 border-t border-gray-100 flex flex-col gap-3">
+                        <button 
+                          type="button"
+                          onClick={() => { setShowRegisterForm(true); setLoginError(null); }}
+                          className="w-full py-4 text-indigo-600 bg-indigo-50/50 rounded-2xl font-black uppercase text-[11px] tracking-widest hover:bg-indigo-50 transition-all"
+                        >
+                           Register as New Borrower
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => setUserRole(UserRole.LENDER)}
+                          className="w-full py-2 text-gray-400 hover:text-gray-600 transition-colors font-black uppercase text-[9px] tracking-widest"
+                        >
+                           Return to Lender View
+                        </button>
+                     </div>
+                  </form>
+               ) : (
+                  <form onSubmit={handleRegisterBorrower} className="space-y-6">
+                     <div className="space-y-2">
+                        <h2 className="text-2xl font-black text-gray-900 tracking-tight">New Member</h2>
+                        <p className="text-sm text-gray-500 font-medium">Create your secure financial identity.</p>
+                     </div>
+
+                     <div className="space-y-4">
+                        <div className="space-y-1">
+                           <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-4">Full Name</label>
+                           <input required placeholder="Siphokazi Nkila" value={newLoan.borrowerName} onChange={e => setNewLoan({...newLoan, borrowerName: e.target.value})} className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-900 shadow-inner" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                           <div className="space-y-1">
+                              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-4">ID Number</label>
+                              <input required placeholder="920101..." value={newLoan.idNumber} onChange={e => setNewLoan({...newLoan, idNumber: e.target.value})} className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-900 font-mono shadow-inner" />
+                           </div>
+                           <div className="space-y-1">
+                              <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-4">Mobile</label>
+                              <input required placeholder="066 071..." value={newLoan.borrowerNumber} onChange={e => setNewLoan({...newLoan, borrowerNumber: e.target.value})} className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-900 font-mono shadow-inner" />
+                           </div>
+                        </div>
+                        <div className="space-y-1">
+                           <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-4">Address</label>
+                           <input required placeholder="East London, Eastern Cape" value={newLoan.physicalAddress} onChange={e => setNewLoan({...newLoan, physicalAddress: e.target.value})} className="w-full px-6 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-900 shadow-inner" />
+                        </div>
+                     </div>
+
+                     <div className="pt-6 space-y-4">
+                        <button type="submit" className="w-full py-5 bg-indigo-600 text-white rounded-3xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3">
+                           <ShieldCheck size={20} /> Register & Sign In
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => { setShowRegisterForm(false); setLoginError(null); }}
+                          className="w-full py-4 text-gray-400 hover:text-gray-600 transition-colors font-black uppercase text-[10px] tracking-widest"
+                        >
+                           Cancel & Return to Login
+                        </button>
+                     </div>
+                  </form>
+               )}
+            </div>
+         </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen overflow-x-hidden">
-      <Layout activeTab={activeTab} setActiveTab={setActiveTab} language={language} setLanguage={setLanguage} userRole={userRole} toggleRole={() => setUserRole(userRole === UserRole.LENDER ? UserRole.BORROWER : UserRole.LENDER)} onRefresh={handleRefresh}>
+      <Layout 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        language={language} 
+        setLanguage={setLanguage} 
+        userRole={userRole} 
+        toggleRole={() => userRole === UserRole.LENDER ? setUserRole(UserRole.BORROWER) : handleLogout()} 
+        onRefresh={handleRefresh}
+      >
         {showToast && (<div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] bg-gray-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 border border-white/10 relative overflow-hidden"><div className="absolute inset-0 xhosa-pattern-sm opacity-[0.05]" /><CheckCircle2 size={18} className="text-emerald-400 relative z-10" /><span className="text-sm font-bold relative z-10">{showToast}</span></div>)}
         <div className="space-y-8 pb-32 animate-in fade-in duration-500">
           
@@ -547,7 +708,7 @@ const App: React.FC = () => {
                           </div>
                        </div>
                        <p className="text-sm text-gray-500 font-medium mb-6 leading-relaxed">View your personal details, credit standing, and identity documents in your secure private vault.</p>
-                       <button onClick={() => setSelectedBorrowerId(CURRENT_BORROWER_ID)} className="bg-[#1a1a1a] text-white w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2">
+                       <button onClick={() => setSelectedBorrowerId(loggedInBorrowerId)} className="bg-[#1a1a1a] text-white w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2">
                           <Eye size={18} /> View My Profile
                        </button>
                     </div>
