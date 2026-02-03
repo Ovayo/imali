@@ -13,7 +13,7 @@ import {
   ChevronRight, Sparkles, History, Info, X, Check, User, MapPin, Fingerprint,
   Send, Building2, Smartphone, ShieldCheck, Bell, Mail, Save, Search, Filter,
   Tag, Globe, ExternalLink, Users, Activity, LogOut, ArrowRight,
-  Wallet, Briefcase, Calendar, ChevronLeft, Shield, Edit2, MessageCircle, MessageSquare, Loader2, ChevronDown, ChevronUp, Calculator as CalcIcon, ClipboardCheck, XCircle, Eye, ArrowUpDown, ArrowLeftRight, Lock, HelpCircle, Download, Trash2, AlertTriangle, PiggyBank, BarChart3, PieChart as PieIcon, Zap, Crown, UserCircle, MailCheck, Share2
+  Wallet, Briefcase, Calendar, ChevronLeft, Shield, Edit2, MessageCircle, MessageSquare, Loader2, ChevronDown, ChevronUp, Calculator as CalcIcon, ClipboardCheck, XCircle, Eye, ArrowUpDown, ArrowLeftRight, Lock, HelpCircle, Download, Trash2, AlertTriangle, PiggyBank, BarChart3, PieChart as PieIcon, Zap, Crown, UserCircle, MailCheck, Share2, ReceiptText
 } from 'lucide-react';
 import { getCreditRiskInsights, getChatResponse } from './services/geminiService';
 import { 
@@ -31,6 +31,7 @@ const App: React.FC = () => {
   const [userRole, setUserRole] = useState<UserRole>(UserRole.LENDER); 
   
   const CURRENT_BORROWER_ID = '9201010001081';
+  const LENDER_EMAIL = 'montiovayo@gmail.com';
 
   const [loans, setLoans] = useState<Loan[]>(() => {
     const saved = localStorage.getItem('imali_loans_v1');
@@ -68,6 +69,14 @@ const App: React.FC = () => {
   const [calcAmount, setCalcAmount] = useState<number>(1000);
   const [calcInterest, setCalcInterest] = useState<number>(DEFAULT_INTEREST_RATE);
   const [calcWeeks, setCalcWeeks] = useState<number>(2);
+
+  const calcResults = useMemo(() => {
+    const interest = Math.round(calcAmount * (calcInterest / 100));
+    return {
+      interest,
+      total: calcAmount + interest
+    };
+  }, [calcAmount, calcInterest]);
 
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
@@ -123,6 +132,13 @@ const App: React.FC = () => {
       .reduce((sum, h) => sum + (h.amount || 0), 0);
   };
 
+  const calculateRemainingBalance = (loan: Loan) => {
+    const penalty = calculatePenaltyDetails(loan).penalty;
+    const totalDue = loan.totalRepayment + penalty;
+    const paid = calculateTotalPaid(loan);
+    return Math.max(0, totalDue - paid);
+  };
+
   const calculateCreditScore = (borrowerLoans: Loan[]) => {
     let score = 550; 
     borrowerLoans.forEach(l => {
@@ -139,6 +155,12 @@ const App: React.FC = () => {
     if (score >= 700) return 'text-emerald-600 bg-emerald-50 border-emerald-100';
     if (score >= 550) return 'text-amber-600 bg-amber-50 border-amber-100';
     return 'text-rose-600 bg-rose-50 border-rose-100';
+  };
+
+  const getScoreCardStyling = (score: number) => {
+    if (score >= 700) return { border: 'border-t-emerald-500', bg: 'bg-emerald-50/10' };
+    if (score >= 550) return { border: 'border-t-amber-500', bg: 'bg-amber-50/10' };
+    return { border: 'border-t-rose-500', bg: 'bg-rose-50/10' };
   };
 
   const borrowers = useMemo(() => {
@@ -165,6 +187,29 @@ const App: React.FC = () => {
     return Array.from(map.values());
   }, [loans]);
 
+  const currentBorrowerCity = useMemo(() => {
+    const currentBorrower = borrowers.find(b => b.idNumber === CURRENT_BORROWER_ID);
+    if (!currentBorrower) return "South Africa";
+    
+    const addr = currentBorrower.address.toLowerCase();
+    if (addr.includes('east london')) return "East London";
+    if (addr.includes('mthatha')) return "Mthatha";
+    if (addr.includes('gqeberha')) return "Gqeberha";
+    if (addr.includes('port elizabeth')) return "Port Elizabeth";
+    if (addr.includes('qonce')) return "Qonce";
+    if (addr.includes('king williams town')) return "King Williams Town";
+    if (addr.includes('mdantsane')) return "Mdantsane";
+    
+    const parts = currentBorrower.address.split(',');
+    return parts[0].trim();
+  }, [borrowers]);
+
+  const currentUserEmail = useMemo(() => {
+    if (userRole === UserRole.LENDER) return LENDER_EMAIL;
+    const currentBorrower = borrowers.find(b => b.idNumber === CURRENT_BORROWER_ID);
+    return currentBorrower?.email || 'my-account@imali.co.za';
+  }, [userRole, borrowers]);
+
   const filteredAndSortedLoans = useMemo(() => {
     let baseLoans = [...loans];
     
@@ -186,6 +231,13 @@ const App: React.FC = () => {
       return loanSortOrder === 'asc' ? comparison : -comparison;
     });
   }, [loans, searchTerm, statusFilter, loanSortKey, loanSortOrder, userRole]);
+
+  const activeLoansForDashboard = useMemo(() => {
+    const relevant = userRole === UserRole.BORROWER 
+      ? loans.filter(l => l.idNumber === CURRENT_BORROWER_ID)
+      : loans;
+    return relevant.filter(l => l.status === RepaymentStatus.PENDING || l.status === RepaymentStatus.OVERDUE).slice(0, 4);
+  }, [loans, userRole]);
 
   const chartData = useMemo(() => {
     const relevantLoans = userRole === UserRole.LENDER ? loans : loans.filter(l => l.idNumber === CURRENT_BORROWER_ID);
@@ -239,7 +291,7 @@ const App: React.FC = () => {
     setIsSendingReport(true);
     await new Promise(resolve => setTimeout(resolve, 2000));
     setIsSendingReport(false);
-    setShowToast(language === Language.XH ? 'Ingxelo ye-email ithunyelwe ku-montiovayo@gmail.com!' : 'Email report dispatched to montiovayo@gmail.com!');
+    setShowToast(language === Language.XH ? `Ingxelo ye-email ithunyelwe ku-${currentUserEmail}!` : `Email report dispatched to ${currentUserEmail}!`);
     setTimeout(() => setShowToast(null), 4000);
   };
 
@@ -288,7 +340,7 @@ const App: React.FC = () => {
     try {
       const response = await ai.models.generateContent({
         model,
-        contents: `Draft a very short, professional email summary of this lending portfolio for the lender Ovayo Monti (montiovayo@gmail.com). Summary: Total R${summary.total}, Rate ${summary.rate.toFixed(1)}%, Overdue Count: ${summary.overdue}. Tone should be encouraging and include a Xhosa greeting.`,
+        contents: `Draft a very short, professional email summary of this lending portfolio for the ${userRole === UserRole.LENDER ? 'lender Ovayo Monti' : 'borrower'}. Recipient Email: ${currentUserEmail}. Summary: Total R${summary.total}, Rate ${summary.rate.toFixed(1)}%, Overdue Count: ${summary.overdue}. Tone should be encouraging and include a Xhosa greeting.`,
       });
       setReportPreview(response.text || "Report content could not be generated.");
     } catch (e) {
@@ -296,13 +348,6 @@ const App: React.FC = () => {
     }
     setIsGeneratingPreview(false);
   };
-
-  const calcResults = useMemo(() => {
-    const interest = calcAmount * (calcInterest / 100);
-    const total = calcAmount + interest;
-    const weeklyPenalty = calcAmount * (DEFAULT_PENALTY_RATE / 100);
-    return { interest, total, weeklyPenalty, monthlyEquivalent: (total / (calcWeeks || 1)) * 4 };
-  }, [calcAmount, calcInterest, calcWeeks]);
 
   const handleMarkAsPaid = (loanId: string) => {
     setLoans(prev => prev.map(l => {
@@ -466,14 +511,26 @@ const App: React.FC = () => {
 
               {userRole === UserRole.BORROWER && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
-                  <div className="bg-emerald-600 p-8 rounded-[40px] text-white shadow-xl relative overflow-hidden group">
-                    <div className="absolute inset-0 opacity-10 xhosa-accent-pattern scale-150 rotate-12" />
-                    <div className="relative z-10 flex flex-col justify-between h-full gap-6">
+                  <div className="bg-emerald-600 p-8 rounded-[40px] text-white shadow-2xl border-4 border-emerald-500/50 relative overflow-hidden group min-h-[350px] flex flex-col justify-between transition-all duration-500 hover:shadow-emerald-500/20">
+                    <div 
+                      className="absolute inset-0 opacity-50 mix-blend-multiply bg-cover bg-center transition-all duration-[2000ms] group-hover:scale-105 group-hover:opacity-60" 
+                      style={{ 
+                        backgroundImage: `url('https://loremflickr.com/1200/800/${encodeURIComponent(currentBorrowerCity + ",landmark")}/all')` 
+                      }} 
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-emerald-900/80 via-transparent to-emerald-600/20 pointer-events-none" />
+                    <div className="absolute inset-0 opacity-15 xhosa-accent-pattern scale-150 rotate-12 pointer-events-none" />
+                    <div className="relative z-10 flex flex-col justify-between h-full gap-8">
                       <div>
-                        <h3 className="text-2xl font-black uppercase tracking-tight">Financial Tip of the Month</h3>
-                        <p className="text-emerald-50 max-w-xl mt-2 font-medium">Ubuntu is built on shared growth. Keeping up with your repayments strengthens your trust score, unlocking higher credit limits for your next goal.</p>
+                        <div className="flex items-center gap-3 mb-4">
+                           <div className="px-3 py-1.5 bg-white/20 rounded-full text-[10px] font-black uppercase tracking-[0.2em] backdrop-blur-xl border border-white/20 shadow-lg">
+                              📍 {currentBorrowerCity}
+                           </div>
+                        </div>
+                        <h3 className="text-3xl font-black uppercase tracking-tight leading-none drop-shadow-md">Financial Tip of the Month</h3>
+                        <p className="text-emerald-50 max-w-xl mt-4 font-medium text-lg leading-relaxed drop-shadow-sm">Ubuntu is built on shared growth. Keeping up with your repayments strengthens your trust score, unlocking higher credit limits for your next goal in {currentBorrowerCity}.</p>
                       </div>
-                      <button onClick={() => setIsAddModalOpen(true)} className="bg-white text-emerald-700 w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg hover:bg-emerald-50 transition-all flex items-center justify-center gap-2">Apply for New Loan Account</button>
+                      <button onClick={() => setIsAddModalOpen(true)} className="bg-white text-emerald-800 w-full py-5 rounded-[24px] font-black text-sm uppercase tracking-widest shadow-2xl hover:bg-emerald-50 active:scale-95 transition-all flex items-center justify-center gap-3">Apply for New Loan Account</button>
                     </div>
                   </div>
 
@@ -498,7 +555,7 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+              <div className="mt-8">
                 <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card min-h-[400px]">
                   <div className="absolute top-0 right-0 p-4 opacity-5 xhosa-accent-pattern scale-150" />
                   <div className="flex items-center gap-3 mb-8"><div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><BarChart3 size={24} /></div><h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">{userRole === UserRole.LENDER ? 'Portfolio Activity' : 'My Disbursement History'}</h3></div>
@@ -514,20 +571,50 @@ const App: React.FC = () => {
                     </ResponsiveContainer>
                   </div>
                 </div>
-                <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card min-h-[400px]">
-                  <div className="absolute top-0 right-0 p-4 opacity-5 xhosa-accent-pattern scale-150" />
-                  <div className="flex items-center gap-3 mb-8"><div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><PieIcon size={24} /></div><h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Loan Status Split</h3></div>
-                  <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={chartData.statusData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={5} dataKey="value">
-                          {chartData.statusData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />)}
-                        </Pie>
-                        <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', fontWeight: 'bold' }} />
-                        <Legend verticalAlign="bottom" align="center" iconType="circle" formatter={(value) => <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest">{value}</span>} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
+              </div>
+
+              {/* ACTIVE LEDGER SECTION ON DASHBOARD */}
+              <div className="mt-8 space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><ReceiptText size={24} /></div>
+                  <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Active Commitments</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                  {activeLoansForDashboard.map(loan => {
+                    const remaining = calculateRemainingBalance(loan);
+                    return (
+                      <div key={loan.id} className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card group hover:shadow-md transition-all">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg uppercase tracking-widest">{loan.id}</div>
+                          <StatusDot status={loan.status} />
+                        </div>
+                        <p className="font-black text-gray-900 text-sm mb-4">{userRole === UserRole.LENDER ? loan.borrowerName : "Primary Account"}</p>
+                        <div className="space-y-4">
+                          <div>
+                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Amount Still to Pay</p>
+                            <p className={`text-2xl font-black font-mono tracking-tight ${loan.status === RepaymentStatus.OVERDUE ? 'text-rose-600' : 'text-indigo-600'}`}>
+                              R {remaining.toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="flex justify-between items-end pt-4 border-t border-gray-50">
+                            <div>
+                              <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Due Date</p>
+                              <p className="text-xs font-bold text-gray-600">{loan.dueDate}</p>
+                            </div>
+                            <button onClick={() => setSelectedLoan(loan)} className="p-2 bg-gray-50 rounded-xl text-gray-400 hover:text-indigo-600 transition-colors">
+                              <ArrowRight size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {activeLoansForDashboard.length === 0 && (
+                    <div className="col-span-full py-12 bg-gray-50 rounded-[40px] border border-dashed border-gray-200 flex flex-col items-center justify-center opacity-40">
+                      <ReceiptText size={40} className="mb-2 text-gray-400" />
+                      <p className="font-black text-[10px] uppercase tracking-widest">No active commitments found</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -592,10 +679,14 @@ const App: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {borrowers.map((borrower) => {
                 const scoreColor = getScoreColor(borrower.score);
+                const styling = getScoreCardStyling(borrower.score);
+                
                 return (
-                  <div key={borrower.idNumber} className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card group hover:shadow-xl transition-all">
+                  <div key={borrower.idNumber} className={`bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden border-t-[12px] ${styling.border} ${styling.bg} cultural-card group hover:shadow-xl transition-all`}>
                     <div className="flex items-start justify-between mb-8 relative z-10">
-                      <div className="w-16 h-16 rounded-[24px] bg-indigo-600 flex items-center justify-center font-black text-xl text-white shadow-lg">{borrower.name[0]}</div>
+                      <div className="w-16 h-16 rounded-[24px] bg-indigo-600 flex items-center justify-center font-black text-xl text-white shadow-lg">
+                        {borrower.name[0]}
+                      </div>
                       <div className="flex flex-col items-end gap-2">
                          <div className={`px-4 py-2 rounded-xl border-2 font-black text-[12px] flex items-center gap-2 shadow-sm ${scoreColor}`}>
                             <Zap size={14} className="fill-current" /> {borrower.score}
@@ -607,12 +698,19 @@ const App: React.FC = () => {
                     </div>
                     <div className="space-y-6 relative z-10">
                       <div>
-                        <h4 className="text-xl font-black text-gray-900 tracking-tight leading-none mb-2">{borrower.name}</h4>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-xl font-black text-gray-900 tracking-tight leading-none">{borrower.name}</h4>
+                          {borrower.score >= 700 ? (
+                            <div className="bg-emerald-500 text-white p-1 rounded-full shadow-lg border-2 border-white"><CheckCircle2 size={14} /></div>
+                          ) : borrower.score < 550 ? (
+                            <div className="bg-rose-500 text-white p-1 rounded-full shadow-lg border-2 border-white"><AlertTriangle size={14} /></div>
+                          ) : null}
+                        </div>
                         <div className="flex items-center gap-4 text-[10px] text-gray-400 font-black uppercase tracking-widest"><span className="flex items-center gap-1"><Smartphone size={12} /> {borrower.phone}</span><span className="flex items-center gap-1"><Fingerprint size={12} /> {borrower.idNumber}</span></div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-gray-50 p-4 rounded-3xl border border-gray-100"><p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Portfolio Size</p><p className="font-black text-gray-900">{borrower.loans.length} Loans</p></div>
-                        <div className="bg-indigo-50/50 p-4 rounded-3xl border border-indigo-100"><p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Active Ledger</p><p className="font-black text-indigo-600">{borrower.loans.filter(l => l.status !== RepaymentStatus.PAID).length} Active</p></div>
+                        <div className="bg-white/80 p-4 rounded-3xl border border-gray-100"><p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Portfolio Size</p><p className="font-black text-gray-900">{borrower.loans.length} Loans</p></div>
+                        <div className="bg-white/80 p-4 rounded-3xl border border-gray-100"><p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Active Ledger</p><p className="font-black text-indigo-600">{borrower.loans.filter(l => l.status !== RepaymentStatus.PAID).length} Active</p></div>
                       </div>
                       <button onClick={() => setSelectedBorrowerId(borrower.idNumber)} className="w-full py-4 bg-[#1a1a1a] text-white rounded-[24px] text-xs font-black uppercase tracking-widest transition-all shadow-xl flex items-center justify-center gap-3"><Eye size={16} /> View Detail Profile</button>
                     </div>
@@ -657,7 +755,7 @@ const App: React.FC = () => {
                         key: 'emailReports', 
                         icon: Mail, 
                         title: t.prefReports, 
-                        desc: t.prefReportsDesc, 
+                        desc: t.prefReportsDesc.replace('{email}', currentUserEmail), 
                         action: handleManualReport, 
                         preview: generateReportPreview 
                       }
@@ -813,10 +911,10 @@ const App: React.FC = () => {
                  <div className="bg-indigo-50/50 rounded-[2.5rem] p-10 border border-indigo-100/50 flex flex-col gap-6 shadow-inner">
                     <div className="flex justify-between items-center group/due">
                        <div className="flex items-center gap-2">
-                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Settlement Due</p>
-                          <div className="relative group"><Info size={12} className="text-gray-300 hover:text-indigo-600 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-48 bg-gray-900 text-white p-3 rounded-xl text-[10px] font-medium leading-relaxed shadow-2xl z-50">Penalty is calculated as <span className="text-indigo-400 font-black">{selectedLoan.penaltyRate}%</span> of principal for every week past the due date.</div></div>
+                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Remaining Balance</p>
+                          <div className="relative group"><Info size={12} className="text-gray-300 hover:text-indigo-600 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-48 bg-gray-900 text-white p-3 rounded-xl text-[10px] font-medium leading-relaxed shadow-2xl z-50">This reflects principal, accrued interest, and active penalties minus any payments received.</div></div>
                        </div>
-                       <p className="text-4xl font-black text-indigo-600 font-mono tracking-tighter">R {(selectedLoan.totalRepayment + calculatePenaltyDetails(selectedLoan).penalty).toLocaleString()}</p>
+                       <p className="text-4xl font-black text-indigo-600 font-mono tracking-tighter">R {calculateRemainingBalance(selectedLoan).toLocaleString()}</p>
                     </div>
                     <div className="flex gap-4 border-t border-indigo-100 pt-6">
                        <div className="flex-1 bg-white/50 p-4 rounded-2xl border border-indigo-50 shadow-sm"><p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Principal</p><p className="text-sm font-black text-gray-800">R {selectedLoan.amountLoaned.toLocaleString()}</p></div>
@@ -848,7 +946,7 @@ const App: React.FC = () => {
         </div>
       )}
       
-      <div className="fixed bottom-8 right-8 z-[150] flex flex-col items-end gap-4">{isChatOpen && (<div className="w-80 md:w-96 h-[500px] bg-white rounded-[32px] shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300"><div className="bg-[#1a1a1a] p-5 text-white flex justify-between items-center relative"><div className="absolute inset-0 opacity-20 xhosa-accent-pattern scale-150 rotate-12" /><div className="flex items-center gap-3 relative z-10"><div className="p-2 bg-indigo-600 rounded-xl shadow-lg"><Sparkles size={20} /></div><h3 className="font-bold text-lg">{t.imaliChat}</h3></div><button onClick={() => setIsChatOpen(false)} className="relative z-10 p-1.5 hover:bg-white/10 rounded-full transition-all"><X size={20} /></button></div><div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gray-50 custom-scrollbar relative">{chatHistory.map((msg, idx) => (<div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`p-3.5 rounded-2xl shadow-sm max-w-[85%] text-sm leading-relaxed border ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none border-indigo-700' : 'bg-white text-gray-700 rounded-tl-none border-gray-100'}`}>{msg.text}</div></div>))}{isChatTyping && (<div className="flex justify-start"><div className="bg-white p-3.5 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 flex items-center gap-2"><Loader2 size={16} className="animate-spin text-indigo-600" /><span className="text-xs text-gray-400">Imali is thinking...</span></div></div>)}<div ref={chatEndRef} /></div><form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-100 flex gap-2"><input value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={t.typeMessage} className="flex-1 px-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-indigo-500 text-sm font-medium" /><button type="submit" className="p-2 bg-[#1a1a1a] text-white rounded-xl hover:bg-black transition-all"><Send size={18} /></button></form></div>)}<button onClick={() => setIsChatOpen(!isChatOpen)} className="w-16 h-16 bg-[#1a1a1a] text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition-all relative group overflow-hidden"><div className="absolute inset-0 opacity-20 xhosa-accent-pattern scale-150 rotate-45 group-hover:rotate-90 transition-transform duration-700" />{isChatOpen ? <X size={28} className="relative z-10" /> : <MessageSquare size={28} className="relative z-10" />}</button></div>
+      <div className="fixed bottom-8 right-8 z-[150] flex flex-col items-end gap-4">{isChatOpen && (<div className="w-80 md:w-96 h-[500px] bg-white rounded-[32px] shadow-2xl border border-gray-100 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-300"><div className="bg-[#1a1a1a] p-5 text-white flex justify-between items-center relative"><div className="absolute inset-0 opacity-20 xhosa-accent-pattern scale-150 rotate-12" /><div className="flex items-center gap-3 relative z-10"><div className="p-2 bg-indigo-600 rounded-xl shadow-lg"><Sparkles size={20} /></div><h3 className="font-bold text-lg">{t.imaliChat}</h3></div><button onClick={() => setIsChatOpen(false)} className="relative z-10 p-1.5 hover:bg-white/10 rounded-full transition-all"><X size={20} /></button></div><div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gray-50 custom-scrollbar relative">{chatHistory.map((msg, idx) => (<div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`p-3.5 rounded-2xl shadow-sm max-w-[85%] text-sm leading-relaxed border ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none border-indigo-700' : 'bg-white text-gray-700 rounded-tl-none border-gray-100'}`}>{msg.text}</div></div>))}{isChatTyping && (<div className="flex justify-start"><div className="bg-white p-3.5 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 flex items-center gap-2"><Loader2 size={16} className="animate-spin text-indigo-600" /><span className="text-xs text-gray-400">imali is thinking...</span></div></div>)}<div ref={chatEndRef} /></div><form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-100 flex gap-2"><input value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={t.typeMessage} className="flex-1 px-4 py-2 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-indigo-500 text-sm font-medium" /><button type="submit" className="p-2 bg-[#1a1a1a] text-white rounded-xl hover:bg-black transition-all"><Send size={18} /></button></form></div>)}<button onClick={() => setIsChatOpen(!isChatOpen)} className="w-16 h-16 bg-[#1a1a1a] text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition-all relative group overflow-hidden"><div className="absolute inset-0 opacity-20 xhosa-accent-pattern scale-150 rotate-45 group-hover:rotate-90 transition-transform duration-700" />{isChatOpen ? <X size={28} className="relative z-10" /> : <MessageSquare size={28} className="relative z-10" />}</button></div>
     </div>
   );
 };

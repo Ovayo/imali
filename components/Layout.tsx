@@ -90,7 +90,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
             <div className="bg-indigo-600 p-1.5 rounded shadow-lg">
                <Wallet size={20} />
             </div>
-            <h1 className="text-xl font-black tracking-tighter uppercase">Imali</h1>
+            <h1 className="text-xl font-black tracking-tighter uppercase">imali</h1>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -126,7 +126,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
                 <div className="bg-indigo-600 p-2 rounded-xl shadow-lg">
                    <Wallet size={24} />
                 </div>
-                <h1 className="text-2xl font-black tracking-tighter uppercase">Imali</h1>
+                <h1 className="text-2xl font-black tracking-tighter uppercase">imali</h1>
               </div>
               <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors border border-white/10"><X size={24} /></button>
             </div>
@@ -141,7 +141,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
               
               {userRole === UserRole.BORROWER && (
                 <button 
-                  onClick={() => { toggleRole(); setIsMobileMenuOpen(false); }}
+                  onClick={role => { toggleRole(); setIsMobileMenuOpen(false); }}
                   className="w-full flex items-center gap-4 px-6 py-5 rounded-2xl transition-all duration-300 relative overflow-hidden text-rose-400 hover:bg-rose-500/10 mt-10 border border-rose-500/20"
                 >
                   <LogOut size={24} />
@@ -179,7 +179,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
                 <div className="absolute inset-0 opacity-20 xhosa-accent-pattern scale-50 group-hover:scale-100 transition-transform duration-500" />
                 <Wallet size={28} className="text-white relative z-10" />
               </div>
-              <div><h1 className="text-2xl font-black tracking-tighter uppercase">Imali</h1><p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.2em]">Micro-Lending</p></div>
+              <div><h1 className="text-2xl font-black tracking-tighter uppercase">imali</h1><p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.2em]">Micro-Lending</p></div>
             </div>
           </div>
           <nav className="space-y-2 mb-8">
