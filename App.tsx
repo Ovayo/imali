@@ -22,6 +22,8 @@ import {
 const LENDER_PASSWORD = 'imali-admin';
 
 const App: React.FC = () => {
+  const [appLoading, setAppLoading] = useState(true);
+  const [loadingStep, setLoadingStep] = useState(0);
   const [language, setLanguage] = useState<Language>(Language.EN);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [userRole, setUserRole] = useState<UserRole>(UserRole.LENDER); 
@@ -48,9 +50,30 @@ const App: React.FC = () => {
   const [editingBorrower, setEditingBorrower] = useState<{ idNumber: string, name: string, address: string, phone: string, email: string } | null>(null);
   
   const [isSendingReport, setIsSendingReport] = useState(false);
-  const [reportPreview, setReportPreview] = useState<string | null>(null);
-  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   const [isSendingNotifications, setIsSendingNotifications] = useState(false);
+
+  // Initial App Loading Sequence
+  useEffect(() => {
+    const steps = [
+      { t: "Synchronizing community ledger...", x: "Ukuhambelanisa iirekhodi..." },
+      { t: "Securing financial vault...", x: "Ukhuseleko lweakhawunti..." },
+      { t: "Applying Ubuntu motifs...", x: "Ukulungisa i-imali hub..." }
+    ];
+
+    const stepInterval = setInterval(() => {
+      setLoadingStep(prev => (prev < steps.length - 1 ? prev + 1 : prev));
+    }, 800);
+
+    const timer = setTimeout(() => {
+      setAppLoading(false);
+      clearInterval(stepInterval);
+    }, 2800);
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(stepInterval);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('imali_loans_v1', JSON.stringify(loans));
@@ -433,6 +456,57 @@ const App: React.FC = () => {
       )}
     </div>
   );
+
+  // PRE-LOADER SCREEN
+  if (appLoading) {
+    const loadingMessages = [
+      { t: "Molo! Preparing your hub...", x: "Molo! Silungisa i-imali..." },
+      { t: "Synchronizing community records...", x: "Ukuhambelanisa iirekhodi..." },
+      { t: "Securing your digital vault...", x: "Ukhuseleko lweakhawunti..." }
+    ];
+    
+    return (
+      <div className="fixed inset-0 z-[1000] bg-[#1a1a1a] flex flex-col items-center justify-center p-6 transition-all duration-700 animate-in fade-in">
+        <div className="absolute inset-0 opacity-[0.05] pointer-events-none xhosa-pattern rotate-12 scale-150" />
+        <div className="bead-accent absolute top-0 left-0 w-full opacity-50" />
+        <div className="bead-accent absolute bottom-0 left-0 w-full opacity-50 rotate-180" />
+        
+        <div className="relative mb-12">
+          <div className="absolute -inset-8 bg-indigo-600/20 blur-3xl rounded-full animate-pulse" />
+          <div className="relative bg-indigo-600 p-8 rounded-[2.5rem] shadow-2xl animate-bounce duration-[2000ms] border border-white/10">
+            <Wallet size={64} className="text-white" />
+          </div>
+          <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex gap-1">
+            <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-ping" />
+            <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-ping delay-75" />
+            <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-ping delay-150" />
+          </div>
+        </div>
+
+        <div className="text-center space-y-4 max-w-xs">
+          <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase mb-2">imali</h1>
+          <div className="h-0.5 w-full bg-white/5 rounded-full overflow-hidden relative">
+            <div 
+              className="absolute top-0 left-0 h-full bg-indigo-500 transition-all duration-500 ease-out shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
+              style={{ width: `${((loadingStep + 1) / 3) * 100}%` }}
+            />
+          </div>
+          <div className="space-y-1 py-4">
+            <p className="text-sm font-black text-white uppercase tracking-widest animate-pulse">
+              {loadingMessages[loadingStep].t}
+            </p>
+            <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.2em]">
+              {loadingMessages[loadingStep].x}
+            </p>
+          </div>
+        </div>
+
+        <div className="absolute bottom-12 text-center opacity-20">
+          <p className="text-[9px] font-black text-white uppercase tracking-[0.4em]">Eastern Cape • Fintech • Ubuntu</p>
+        </div>
+      </div>
+    );
+  }
 
   if (userRole === UserRole.BORROWER && !loggedInBorrowerId) {
     return (
