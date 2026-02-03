@@ -73,7 +73,7 @@ const App: React.FC = () => {
   const [showToast, setShowToast] = useState<string | null>(null);
 
   const [calcAmount, setCalcAmount] = useState<number>(1000);
-  const [calcInterest] = useState<number>(DEFAULT_INTEREST_RATE);
+  const [calcInterest, setCalcInterest] = useState<number>(DEFAULT_INTEREST_RATE);
   const [calcWeeks, setCalcWeeks] = useState<number>(2);
 
   const calcResults = useMemo(() => {
@@ -93,7 +93,6 @@ const App: React.FC = () => {
     emailReports: true,
     emailNewAppAlerts: true,
     emailOverdueAlerts: true,
-    // Fix: Removed invalid type assignment in object literal for darkMode property
     darkMode: false
   });
 
@@ -155,14 +154,8 @@ const App: React.FC = () => {
 
   const getScoreColor = (score: number) => {
     if (score >= 700) return 'text-emerald-600 bg-emerald-50 border-emerald-100';
-    if (score >= 550) return 'text-amber-600 bg-amber-50 border-emerald-100';
+    if (score >= 550) return 'text-amber-600 bg-amber-50 border-amber-100';
     return 'text-rose-600 bg-rose-50 border-rose-100';
-  };
-
-  const getScoreCardStyling = (score: number) => {
-    if (score >= 700) return { border: 'border-t-emerald-500', bg: 'bg-emerald-50/10' };
-    if (score >= 550) return { border: 'border-t-amber-500', bg: 'bg-amber-50/10' };
-    return { border: 'border-t-rose-500', bg: 'bg-rose-50/10' };
   };
 
   const borrowers = useMemo(() => {
@@ -579,7 +572,7 @@ const App: React.FC = () => {
                   <div className="bg-emerald-600 p-6 md:p-8 rounded-[2.5rem] md:rounded-[40px] text-white shadow-2xl relative overflow-hidden group min-h-[300px] md:min-h-[350px] flex flex-col justify-between transition-all duration-500 hover:shadow-emerald-500/20">
                     <div 
                       className="absolute inset-0 opacity-60 mix-blend-multiply bg-cover bg-top transition-all duration-[2000ms] group-hover:scale-105 group-hover:opacity-70" 
-                      style={{ backgroundImage: `url('https://images.unsplash.com/photo-1523805009345-7448845a9e53?q=80&w=1200&auto=format&fit=crop')` }} 
+                      style={{ backgroundImage: `url('https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=1200&auto=format&fit=crop')` }} 
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-emerald-900/80 via-transparent to-emerald-600/20 pointer-events-none" />
                     <div className="absolute inset-0 opacity-15 xhosa-accent-pattern scale-150 rotate-12 pointer-events-none" />
@@ -711,14 +704,45 @@ const App: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
               {borrowers.map((borrower) => {
                 const scoreColor = getScoreColor(borrower.score);
-                const styling = getScoreCardStyling(borrower.score);
                 return (
-                  <div key={borrower.idNumber} className={`bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden border-t-[10px] md:border-t-[12px] ${styling.border} ${styling.bg} cultural-card group hover:shadow-xl transition-all`}>
-                    <div className="flex items-start justify-between mb-6 md:mb-8 relative z-10"><div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-[24px] bg-indigo-600 flex items-center justify-center font-black text-lg md:text-xl text-white shadow-lg">{borrower.name[0]}</div><div className="flex flex-col items-end gap-2"><div className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl border-2 font-black text-[10px] md:text-[12px] flex items-center gap-2 shadow-sm ${scoreColor}`}><Zap size={12} className="fill-current" /> {borrower.score}</div><div className="flex gap-2"><button onClick={() => handleEditBorrower(borrower)} className="p-2 bg-gray-50 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all border border-gray-100 shadow-sm"><Edit2 size={12} /></button></div></div></div>
+                  <div key={borrower.idNumber} className={`bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card group hover:shadow-xl transition-all`}>
+                    <div className="flex items-start justify-between mb-6 md:mb-8 relative z-10">
+                      <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-[24px] bg-indigo-600 flex items-center justify-center font-black text-lg md:text-xl text-white shadow-lg">{borrower.name[0]}</div>
+                      <div className="flex flex-col items-end gap-2">
+                        <div className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl border font-black text-[10px] md:text-[12px] flex items-center gap-2 shadow-sm ${scoreColor}`}>
+                          <Zap size={12} className="fill-current" /> {borrower.score}
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => handleEditBorrower(borrower)} className="p-2 bg-gray-50 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all border border-gray-100 shadow-sm">
+                            <Edit2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                     <div className="space-y-4 md:space-y-6 relative z-10">
-                      <div><div className="flex items-center justify-between mb-1 md:mb-2"><h4 className="text-lg md:text-xl font-black text-gray-900 tracking-tight leading-none">{borrower.name}</h4>{borrower.score >= 700 ? <div className="bg-emerald-500 text-white p-1 rounded-full shadow-lg border-2 border-white"><CheckCircle2 size={12} /></div> : borrower.score < 550 ? <div className="bg-rose-500 text-white p-1 rounded-full shadow-lg border-2 border-white"><AlertTriangle size={12} /></div> : null}</div><div className="flex flex-wrap items-center gap-3 md:gap-4 text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-widest"><span className="flex items-center gap-1"><Smartphone size={10} /> {borrower.phone}</span><span className="flex items-center gap-1"><Fingerprint size={10} /> {borrower.idNumber}</span></div></div>
-                      <div className="grid grid-cols-2 gap-3 md:gap-4"><div className="bg-white/80 p-3 md:p-4 rounded-2xl md:rounded-3xl border border-gray-100"><p className="text-[8px] md:text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Size</p><p className="text-xs md:text-sm font-black text-gray-900">{borrower.loans.length} Loans</p></div><div className="bg-white/80 p-3 md:p-4 rounded-2xl md:rounded-3xl border border-gray-100"><p className="text-[8px] md:text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Active</p><p className="text-xs md:text-sm font-black text-indigo-600">{borrower.loans.filter(l => l.status !== RepaymentStatus.PAID).length} Loans</p></div></div>
-                      <button onClick={() => setSelectedBorrowerId(borrower.idNumber)} className="w-full py-3.5 md:py-4 bg-[#1a1a1a] text-white rounded-xl md:rounded-[24px] text-[10px] md:text-xs font-black uppercase tracking-widest transition-all shadow-xl flex items-center justify-center gap-3"><Eye size={14} /> Profile Detail</button>
+                      <div>
+                        <div className="flex items-center justify-between mb-1 md:mb-2">
+                          <h4 className="text-lg md:text-xl font-black text-gray-900 tracking-tight leading-none">{borrower.name}</h4>
+                          {borrower.score >= 700 ? <div className="bg-emerald-500 text-white p-1 rounded-full shadow-lg border-2 border-white"><CheckCircle2 size={12} /></div> : borrower.score < 550 ? <div className="bg-rose-500 text-white p-1 rounded-full shadow-lg border-2 border-white"><AlertTriangle size={12} /></div> : null}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 md:gap-4 text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-widest">
+                          <span className="flex items-center gap-1"><Smartphone size={10} /> {borrower.phone}</span>
+                          <span className="flex items-center gap-1"><Fingerprint size={10} /> {borrower.idNumber}</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 md:gap-4">
+                        <div className="bg-gray-50/50 p-3 md:p-4 rounded-2xl md:rounded-3xl border border-gray-100">
+                          <p className="text-[8px] md:text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Total</p>
+                          <p className="text-xs md:text-sm font-black text-gray-900">{borrower.loans.length} Loans</p>
+                        </div>
+                        <div className="bg-gray-50/50 p-3 md:p-4 rounded-2xl md:rounded-3xl border border-gray-100">
+                          <p className="text-[8px] md:text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Active</p>
+                          <p className="text-xs md:text-sm font-black text-indigo-600">{borrower.loans.filter(l => l.status !== RepaymentStatus.PAID).length} Active</p>
+                        </div>
+                      </div>
+                      <button onClick={() => setSelectedBorrowerId(borrower.idNumber)} className="w-full py-3.5 md:py-4 bg-[#1a1a1a] text-white rounded-xl md:rounded-[24px] text-[10px] md:text-xs font-black uppercase tracking-widest transition-all shadow-xl flex items-center justify-center gap-3">
+                        <Eye size={14} /> Profile Detail
+                      </button>
                     </div>
                   </div>
                 );
@@ -786,7 +810,7 @@ const App: React.FC = () => {
            <div className="bg-white w-full max-w-2xl rounded-[2.5rem] md:rounded-[4rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 relative flex flex-col max-h-[90vh]">
               <div className="bg-[#1a1a1a] p-6 md:p-12 text-white relative shrink-0"><div className="flex justify-between items-start relative z-10"><div className="flex items-center gap-4 md:gap-8"><div className="w-16 h-16 md:w-24 md:h-24 rounded-2xl md:rounded-[2rem] bg-indigo-600 flex items-center justify-center text-2xl md:text-4xl font-black shadow-2xl border-4 border-white/10">{borrowers.find(b => b.idNumber === selectedBorrowerId)?.name[0]}</div><div><h3 className="text-xl md:text-4xl font-black tracking-tighter uppercase leading-none">{borrowers.find(b => b.idNumber === selectedBorrowerId)?.name}</h3><p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.2em] md:tracking-[0.3em] mt-1 md:mt-2">{selectedBorrowerId}</p></div></div><button onClick={() => setSelectedBorrowerId(null)} className="p-2 md:p-4 hover:bg-white/10 rounded-full border border-white/10"><X size={20} className="md:w-7 md:h-7" /></button></div></div>
               <div className="flex-1 overflow-y-auto p-6 md:p-12 space-y-8 md:space-y-10 custom-scrollbar">
-                <div className={`p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] border-2 flex items-center justify-between ${getScoreColor(borrowers.find(b => b.idNumber === selectedBorrowerId)?.score || 550)}`}><div className="flex items-center gap-3 md:gap-5"><Zap size={24} className="md:w-10 md:h-10 fill-current" /><div><p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] opacity-70">Credit Value</p><p className="text-3xl md:text-5xl font-black font-mono leading-none">{borrowers.find(b => b.idNumber === selectedBorrowerId)?.score}</p></div></div><div className="text-right"><p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] opacity-70">Motif</p><p className="font-black uppercase tracking-widest text-sm md:text-lg">{borrowers.find(b => b.idNumber === selectedBorrowerId)?.score >= 700 ? 'Platinum' : 'Steady'}</p></div></div>
+                <div className={`p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] border flex items-center justify-between ${getScoreColor(borrowers.find(b => b.idNumber === selectedBorrowerId)?.score || 550)}`}><div className="flex items-center gap-3 md:gap-5"><Zap size={24} className="md:w-10 md:h-10 fill-current" /><div><p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] opacity-70">Credit Value</p><p className="text-3xl md:text-5xl font-black font-mono leading-none">{borrowers.find(b => b.idNumber === selectedBorrowerId)?.score}</p></div></div><div className="text-right"><p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] opacity-70">Motif</p><p className="font-black uppercase tracking-widest text-sm md:text-lg">{borrowers.find(b => b.idNumber === selectedBorrowerId)?.score >= 700 ? 'Platinum' : 'Steady'}</p></div></div>
                 <div className="bg-gray-50 p-6 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] flex flex-col md:flex-row md:items-center justify-between gap-4 border border-gray-100 shadow-inner"><div className="flex items-center gap-4"><div className="p-2.5 md:p-3 bg-white rounded-xl shadow-sm text-indigo-600"><Smartphone size={20} className="md:w-6 md:h-6" /></div><div><p className="text-[8px] md:text-[9px] font-black text-gray-400 uppercase tracking-widest">Contact</p><p className="font-black text-gray-900 text-xs md:text-base">{borrowers.find(b => b.idNumber === selectedBorrowerId)?.phone}</p></div></div><div className="flex items-center gap-4"><div className="p-2.5 md:p-3 bg-white rounded-xl shadow-sm text-indigo-600"><Mail size={20} className="md:w-6 md:h-6" /></div><div><p className="text-[8px] md:text-[9px] font-black text-gray-400 uppercase tracking-widest">Email</p><p className="font-black text-gray-900 text-xs md:text-base">{borrowers.find(b => b.idNumber === selectedBorrowerId)?.email || 'None'}</p></div></div></div>
                 {userRole === UserRole.BORROWER && <button onClick={() => { handleEditBorrower(currentBorrowerAccount); setSelectedBorrowerId(null); }} className="w-full py-4 bg-gray-900 text-white rounded-xl md:rounded-2xl font-black uppercase tracking-widest text-[10px] md:text-xs flex items-center justify-center gap-2"><Edit2 size={16} /> Update My Details</button>}
                 {userRole === UserRole.LENDER && <button onClick={() => handleCreateNewLoanForBorrower(borrowers.find(b => b.idNumber === selectedBorrowerId))} className="w-full py-5 md:py-6 bg-indigo-600 text-white rounded-[1.5rem] md:rounded-[2rem] font-black uppercase text-[10px] md:text-xs tracking-widest shadow-2xl flex items-center justify-center gap-4 hover:bg-indigo-700 active:scale-95 transition-all"><Plus size={20} className="md:w-6 md:h-6" /> Apply for New Loan</button>}
