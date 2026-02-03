@@ -58,6 +58,7 @@ export interface Loan {
   idNumber: string;
   physicalAddress: string;
   borrowerNumber: string; // Primary mobile number
+  email?: string; // Optional email address
   alternativeNumber?: string;
   employer?: string;
   payoutMethod: PayoutMethod;

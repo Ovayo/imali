@@ -14,10 +14,10 @@ interface LayoutProps {
   userRole: UserRole;
   toggleRole: () => void;
   onRefresh?: () => Promise<void>;
-  adminProfile?: { name: string, email: string };
+  userName?: string;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, language, setLanguage, userRole, toggleRole, onRefresh, adminProfile }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, language, setLanguage, userRole, toggleRole, onRefresh, userName }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -31,9 +31,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
   const menuItems = [
     { id: 'dashboard', label: t.dashboard, icon: LayoutDashboard },
     { id: 'loans', label: userRole === UserRole.LENDER ? t.loans : 'My Loans', icon: Wallet },
-    ...(userRole === UserRole.LENDER ? [{ id: 'borrowers', label: t.borrowers, icon: Users }] : []),
+    ...(userRole === UserRole.LENDER ? [
+      { id: 'borrowers', label: t.borrowers, icon: Users },
+      { id: 'settings', label: t.settings, icon: Settings }
+    ] : []),
     { id: 'calculator', label: t.loanCalculator, icon: Calculator },
-    { id: 'settings', label: t.settings, icon: Settings },
   ];
 
   const handleMobileNav = (id: string) => {
@@ -73,6 +75,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
     }
     setPullDistance(0);
   };
+
+  const displayUserName = userName || (userRole === UserRole.LENDER ? 'Ovayo M.' : 'Borrower');
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#fdfcfb] xhosa-pattern">
@@ -141,7 +145,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
               
               {userRole === UserRole.BORROWER && (
                 <button 
-                  onClick={role => { toggleRole(); setIsMobileMenuOpen(false); }}
+                  onClick={() => { toggleRole(); setIsMobileMenuOpen(false); }}
                   className="w-full flex items-center gap-4 px-6 py-5 rounded-2xl transition-all duration-300 relative overflow-hidden text-rose-400 hover:bg-rose-500/10 mt-10 border border-rose-500/20"
                 >
                   <LogOut size={24} />
@@ -156,10 +160,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
               </button>
               <div className="flex items-center gap-4 p-2">
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-white shadow-lg border border-white/10 overflow-hidden relative ${userRole === UserRole.LENDER ? 'bg-indigo-600' : 'bg-emerald-600'}`}>
-                  {userRole === UserRole.LENDER ? 'OM' : 'SN'}
+                  {displayUserName[0]}
                 </div>
                 <div>
-                  <p className="font-black text-sm uppercase tracking-tight text-white">{userRole === UserRole.LENDER ? 'Ovayo M.' : 'Siphokazi N.'}</p>
+                  <p className="font-black text-sm uppercase tracking-tight text-white">{displayUserName}</p>
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{userRole === UserRole.LENDER ? 'Village Lender' : 'Verified Borrower'}</p>
                 </div>
               </div>
@@ -231,11 +235,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
               <div className="absolute bottom-0 right-0 p-1 opacity-5 xhosa-pattern-sm" />
               <div className="flex items-center justify-between mb-4"><p className="text-[9px] text-gray-400 uppercase tracking-widest font-black">Ulwimi</p><button onClick={() => setLanguage(language === Language.EN ? Language.XH : Language.EN)} className="flex items-center gap-1.5 text-xs font-black text-indigo-400 hover:text-indigo-300 transition-colors uppercase"><Languages size={14} />{language === Language.EN ? 'isiXhosa' : 'English'}</button></div>
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-lg border border-white/10 relative overflow-hidden ${userRole === UserRole.LENDER ? 'bg-gradient-to-tr from-indigo-400 to-indigo-600' : 'bg-gradient-to-tr from-emerald-400 to-emerald-600'}`}>
-                  {userRole === UserRole.LENDER ? 'OM' : 'SN'}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-lg border border-white/10 relative overflow-hidden ${userRole === UserRole.LENDER ? 'bg-indigo-600' : 'bg-emerald-600'}`}>
+                  {displayUserName[0]}
                 </div>
                 <div>
-                  <p className="font-black text-sm uppercase tracking-tight text-white">{userRole === UserRole.LENDER ? 'Ovayo M.' : 'Siphokazi N.'}</p>
+                  <p className="font-black text-sm uppercase tracking-tight text-white">{displayUserName}</p>
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{userRole === UserRole.LENDER ? 'Village Lender' : 'Verified Borrower'}</p>
                 </div>
               </div>
@@ -282,7 +286,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
           <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
             <div>
               <h2 className="text-3xl font-black text-gray-900 tracking-tight uppercase">
-                {activeTab === 'dashboard' && (userRole === UserRole.LENDER ? `${language === Language.XH ? 'Molo!' : 'Hello!'} ${t.dashboard}` : `Molo, Siphokazi!`)}
+                {activeTab === 'dashboard' && (userRole === UserRole.LENDER ? `${language === Language.XH ? 'Molo!' : 'Hello!'} ${t.dashboard}` : `${language === Language.XH ? 'Molo' : 'Hello'}, ${displayUserName.split(' ')[0]}!`)}
                 {activeTab === 'loans' && (userRole === UserRole.LENDER ? t.loans : 'My Active Loans')}
                 {activeTab === 'borrowers' && t.borrowers}
                 {activeTab === 'calculator' && t.loanCalculator}
