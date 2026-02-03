@@ -565,7 +565,7 @@ export const TRANSLATIONS = {
     prefSMSAuto: 'WhatsApp Automation',
     prefSMSDesc: 'Send automatic reminders via WhatsApp.',
     prefReports: 'Email Reports',
-    prefReportsDesc: 'Weekly summary of your portfolio.',
+    prefReportsDesc: 'Weekly summary of your portfolio sent to montiovayo@gmail.com.',
     prefEmailNewApp: 'Email: New Applications',
     prefEmailNewAppDesc: 'Get an email as soon as a borrower applies.',
     prefEmailOverdue: 'Email: Overdue Payments',
@@ -576,7 +576,10 @@ export const TRANSLATIONS = {
     editBorrower: 'Edit Borrower Info',
     saveChanges: 'Save Changes',
     confirmReminder: 'Are you sure you want to send a reminder to',
-    newCustomer: 'New Customer'
+    newCustomer: 'New Customer',
+    sendNotifications: 'Send Notifications',
+    notifSent: 'Notifications sent successfully!',
+    sendingNotifs: 'Sending community alerts...'
   },
   [Language.XH]: {
     dashboard: 'Ideshibhodi',
@@ -642,7 +645,7 @@ export const TRANSLATIONS = {
     prefSMSAuto: 'I-WhatsApp Automation',
     prefSMSDesc: 'Thumela izikhumbuzo nge-WhatsApp.',
     prefReports: 'Iingxelo nge-Email',
-    prefReportsDesc: 'Isishwankathelo seveki semali yakho.',
+    prefReportsDesc: 'Isishwankathelo seveki semali yakho sithunyelwa ku-montiovayo@gmail.com.',
     prefEmailNewApp: 'Email: Izicelo Ezintsha',
     prefEmailNewAppDesc: 'Fumana i-email xa umntu efaka isicelo.',
     prefEmailOverdue: 'Email: Ezidlulileyo Ixesha',
@@ -653,6 +656,9 @@ export const TRANSLATIONS = {
     editBorrower: 'Hlela iinkcukacha',
     saveChanges: 'Gcina utshintsho',
     confirmReminder: 'Uqinisekile ukuba ufuna ukuhlawula ku',
-    newCustomer: 'Umboleki omtsha'
+    newCustomer: 'Umboleki omtsha',
+    sendNotifications: 'Thumela Izaziso',
+    notifSent: 'Izaziso zithunyelwe ngempumelelo!',
+    sendingNotifs: 'Kuthunyelwa izaziso...'
   }
 };

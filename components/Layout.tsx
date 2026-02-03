@@ -1,7 +1,7 @@
 
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
-import { Menu, Wallet, Users, LayoutDashboard, Settings, Bell, Languages, Calculator, ArrowLeftRight, UserCheck, ShieldCheck, X, RefreshCw, Loader2 } from 'lucide-react';
+import { Menu, Wallet, Users, LayoutDashboard, Settings, Bell, Languages, Calculator, ArrowLeftRight, UserCheck, ShieldCheck, X, RefreshCw, Loader2, LogOut } from 'lucide-react';
 import { Language, UserRole } from '../types';
 import { TRANSLATIONS } from '../constants';
 
@@ -27,10 +27,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
 
   const t = TRANSLATIONS[language];
 
+  // Filter menu items based on user role
   const menuItems = [
     { id: 'dashboard', label: t.dashboard, icon: LayoutDashboard },
-    { id: 'loans', label: t.loans, icon: Wallet },
-    { id: 'borrowers', label: t.borrowers, icon: Users },
+    { id: 'loans', label: userRole === UserRole.LENDER ? t.loans : 'My Loans', icon: Wallet },
+    ...(userRole === UserRole.LENDER ? [{ id: 'borrowers', label: t.borrowers, icon: Users }] : []),
     { id: 'calculator', label: t.loanCalculator, icon: Calculator },
     { id: 'settings', label: t.settings, icon: Settings },
   ];
@@ -54,10 +55,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
     const currentY = e.touches[0].pageY;
     const diff = currentY - startY.current;
     if (diff > 0) {
-      // Apply some resistance
       const dampenedDiff = Math.pow(diff, 0.85);
       setPullDistance(Math.min(dampenedDiff, 100));
-      if (diff > 10) e.preventDefault(); // Prevent standard scroll
+      if (diff > 10) e.preventDefault(); 
     }
   };
 
@@ -67,7 +67,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
     
     if (pullDistance > 60 && onRefresh) {
       setIsRefreshing(true);
-      setPullDistance(70); // Keep indicator visible during refresh
+      setPullDistance(70); 
       await onRefresh();
       setIsRefreshing(false);
     }
@@ -94,13 +94,23 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
           </div>
         </div>
         <div className="flex items-center gap-2">
-           <button 
-             onClick={toggleRole}
-             className="flex items-center gap-1.5 text-[10px] font-black uppercase bg-white/10 px-3 py-1.5 rounded-full border border-white/5 text-white"
-           >
-             <ArrowLeftRight size={12} />
-             {userRole === UserRole.LENDER ? 'Borrower' : 'Lender'}
-           </button>
+           {userRole === UserRole.BORROWER ? (
+             <button 
+               onClick={toggleRole}
+               className="flex items-center gap-1.5 text-[10px] font-black uppercase px-4 py-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-400"
+             >
+               <LogOut size={12} />
+               Log Out
+             </button>
+           ) : (
+             <button 
+               onClick={toggleRole}
+               className="flex items-center gap-1.5 text-[10px] font-black uppercase px-3 py-1.5 rounded-full border border-white/5 bg-indigo-600"
+             >
+               <ArrowLeftRight size={12} />
+               Borrower View
+             </button>
+           )}
         </div>
       </header>
 
@@ -108,7 +118,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-[100] md:hidden">
           <div className="absolute inset-0 bg-[#1a1a1a]/80 backdrop-blur-sm transition-opacity" onClick={() => setIsMobileMenuOpen(false)} />
-          <nav className="absolute left-0 top-0 bottom-0 w-4/5 max-w-sm bg-[#1a1a1a] text-white shadow-2xl flex flex-col animate-in slide-in-from-left duration-300 relative overflow-hidden">
+          <nav className="absolute left-0 top-0 bottom-0 w-4/5 max-sm bg-[#1a1a1a] text-white shadow-2xl flex flex-col animate-in slide-in-from-left duration-300 relative overflow-hidden">
             <div className="absolute inset-0 opacity-[0.05] pointer-events-none xhosa-pattern rotate-12 scale-150" />
             <div className="bead-accent absolute top-0 left-0 w-full opacity-50" />
             <div className="p-8 flex justify-between items-center relative z-10 border-b border-white/5">
@@ -128,6 +138,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
                   {activeTab === item.id && <div className="absolute right-0 top-0 h-full w-1.5 bg-indigo-600" />}
                 </button>
               ))}
+              
+              {userRole === UserRole.BORROWER && (
+                <button 
+                  onClick={() => { toggleRole(); setIsMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-4 px-6 py-5 rounded-2xl transition-all duration-300 relative overflow-hidden text-rose-400 hover:bg-rose-500/10 mt-10 border border-rose-500/20"
+                >
+                  <LogOut size={24} />
+                  <span className="font-black text-base uppercase tracking-widest">Log Out</span>
+                </button>
+              )}
             </div>
             <div className="p-8 space-y-4 border-t border-white/5 bg-black/20 relative z-10">
               <button onClick={() => { setLanguage(language === Language.EN ? Language.XH : Language.EN); setIsMobileMenuOpen(false); }} className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 text-sm font-bold text-white">
@@ -135,8 +155,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
                 <span className="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] uppercase font-black">{language === Language.EN ? 'isiXhosa' : 'English'}</span>
               </button>
               <div className="flex items-center gap-4 p-2">
-                <div className="w-12 h-12 rounded-full bg-indigo-600 flex items-center justify-center font-black text-white shadow-lg border border-white/10 overflow-hidden relative">OM</div>
-                <div><p className="font-black text-sm uppercase tracking-tight text-white">Ovayo M.</p><p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Village Lender</p></div>
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-white shadow-lg border border-white/10 overflow-hidden relative ${userRole === UserRole.LENDER ? 'bg-indigo-600' : 'bg-emerald-600'}`}>
+                  {userRole === UserRole.LENDER ? 'OM' : 'SN'}
+                </div>
+                <div>
+                  <p className="font-black text-sm uppercase tracking-tight text-white">{userRole === UserRole.LENDER ? 'Ovayo M.' : 'Siphokazi N.'}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{userRole === UserRole.LENDER ? 'Village Lender' : 'Verified Borrower'}</p>
+                </div>
               </div>
             </div>
           </nav>
@@ -166,15 +191,54 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
             ))}
           </nav>
           <div className="mt-auto space-y-4">
-            <button onClick={toggleRole} className="w-full p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all group relative overflow-hidden shadow-2xl">
-              <div className="absolute inset-0 opacity-10 xhosa-pattern-sm" />
-              <div className="flex items-center justify-between mb-2"><p className="text-[9px] text-gray-500 uppercase tracking-widest font-black">Portal Motif</p><ArrowLeftRight size={12} className="text-indigo-400 group-hover:rotate-180 transition-transform duration-500" /></div>
-              <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-indigo-600/20 flex items-center justify-center text-indigo-400"><ShieldCheck size={18} /></div><div className="text-left"><p className="text-sm font-black text-white uppercase tracking-tight">Lender Hub</p><p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Switch Portal</p></div></div>
-            </button>
+            {userRole === UserRole.BORROWER ? (
+              <button onClick={toggleRole} className="w-full p-5 bg-rose-500/10 rounded-2xl border border-rose-500/20 hover:bg-rose-500/20 transition-all group relative overflow-hidden shadow-2xl">
+                <div className="absolute inset-0 opacity-5 xhosa-pattern-sm bg-rose-500" />
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[9px] text-rose-400 uppercase tracking-widest font-black">Account Security</p>
+                  <LogOut size={12} className="text-rose-400 group-hover:-translate-x-1 transition-transform" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-rose-500 text-white">
+                    <LogOut size={16} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-black text-rose-400 uppercase tracking-tight">Log Out</p>
+                    <p className="text-[10px] text-rose-400/60 font-bold uppercase tracking-widest">Exit Borrower Hub</p>
+                  </div>
+                </div>
+              </button>
+            ) : (
+              <button onClick={toggleRole} className="w-full p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all group relative overflow-hidden shadow-2xl">
+                <div className="absolute inset-0 opacity-10 xhosa-pattern-sm" />
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[9px] text-gray-500 uppercase tracking-widest font-black">Portal Switch</p>
+                  <ArrowLeftRight size={12} className="text-indigo-400 group-hover:rotate-180 transition-transform duration-500" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-indigo-600/20 text-indigo-400">
+                    <ShieldCheck size={18} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-black text-white uppercase tracking-tight">Borrower Portal</p>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Switch View</p>
+                  </div>
+                </div>
+              </button>
+            )}
+            
             <div className="bg-black/20 rounded-2xl border border-white/5 p-4 relative overflow-hidden">
               <div className="absolute bottom-0 right-0 p-1 opacity-5 xhosa-pattern-sm" />
               <div className="flex items-center justify-between mb-4"><p className="text-[9px] text-gray-400 uppercase tracking-widest font-black">Ulwimi</p><button onClick={() => setLanguage(language === Language.EN ? Language.XH : Language.EN)} className="flex items-center gap-1.5 text-xs font-black text-indigo-400 hover:text-indigo-300 transition-colors uppercase"><Languages size={14} />{language === Language.EN ? 'isiXhosa' : 'English'}</button></div>
-              <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-400 to-indigo-600 flex items-center justify-center font-black text-white shadow-lg border border-white/10 relative overflow-hidden">OM</div><div><p className="font-black text-sm uppercase tracking-tight text-white">Ovayo M.</p><p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Village Lender</p></div></div>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-lg border border-white/10 relative overflow-hidden ${userRole === UserRole.LENDER ? 'bg-gradient-to-tr from-indigo-400 to-indigo-600' : 'bg-gradient-to-tr from-emerald-400 to-emerald-600'}`}>
+                  {userRole === UserRole.LENDER ? 'OM' : 'SN'}
+                </div>
+                <div>
+                  <p className="font-black text-sm uppercase tracking-tight text-white">{userRole === UserRole.LENDER ? 'Ovayo M.' : 'Siphokazi N.'}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{userRole === UserRole.LENDER ? 'Village Lender' : 'Verified Borrower'}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -218,16 +282,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
           <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
             <div>
               <h2 className="text-3xl font-black text-gray-900 tracking-tight uppercase">
-                {activeTab === 'dashboard' && `${language === Language.XH ? 'Molo!' : 'Hello!'} ${t.dashboard}`}
-                {activeTab === 'loans' && t.loans}
+                {activeTab === 'dashboard' && (userRole === UserRole.LENDER ? `${language === Language.XH ? 'Molo!' : 'Hello!'} ${t.dashboard}` : `Molo, Siphokazi!`)}
+                {activeTab === 'loans' && (userRole === UserRole.LENDER ? t.loans : 'My Active Loans')}
                 {activeTab === 'borrowers' && t.borrowers}
                 {activeTab === 'calculator' && t.loanCalculator}
                 {activeTab === 'settings' && t.settings}
               </h2>
               <div className="flex items-center gap-3 mt-1">
                 <p className="text-gray-500 text-sm font-medium">
-                  {activeTab === 'dashboard' && t.statsDesc}
-                  {activeTab === 'loans' && 'Ledger of current commitments'}
+                  {activeTab === 'dashboard' && (userRole === UserRole.LENDER ? t.statsDesc : 'Your current financial standing and trust score.')}
+                  {activeTab === 'loans' && (userRole === UserRole.LENDER ? 'Ledger of current commitments' : 'Track your repayments and upcoming dues.')}
                   {activeTab === 'borrowers' && 'Your trusted community network'}
                   {activeTab === 'calculator' && 'Financial growth projections'}
                   {activeTab === 'settings' && 'Platform operational motifs'}

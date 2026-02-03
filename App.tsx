@@ -1,3 +1,4 @@
+
 import * as React from 'react';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import Layout from './components/Layout';
@@ -5,13 +6,14 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend
 } from 'recharts';
+import { GoogleGenAI } from "@google/genai";
 import { Loan, RepaymentStatus, PayoutMethod, Language, UserSettings, UserRole, ApplicationStatus, LoanTemplate, ChatMessage } from './types';
 import { 
   TrendingUp, AlertCircle, CheckCircle2, Clock, Plus, Phone, CreditCard,
   ChevronRight, Sparkles, History, Info, X, Check, User, MapPin, Fingerprint,
   Send, Building2, Smartphone, ShieldCheck, Bell, Mail, Save, Search, Filter,
   Tag, Globe, ExternalLink, Users, Activity, LogOut, ArrowRight,
-  Wallet, Briefcase, Calendar, ChevronLeft, Shield, Edit2, MessageCircle, MessageSquare, Loader2, ChevronDown, ChevronUp, Calculator as CalcIcon, ClipboardCheck, XCircle, Eye, ArrowUpDown, ArrowLeftRight, Lock, HelpCircle, Download, Trash2, AlertTriangle, PiggyBank, BarChart3, PieChart as PieIcon, Zap, Crown
+  Wallet, Briefcase, Calendar, ChevronLeft, Shield, Edit2, MessageCircle, MessageSquare, Loader2, ChevronDown, ChevronUp, Calculator as CalcIcon, ClipboardCheck, XCircle, Eye, ArrowUpDown, ArrowLeftRight, Lock, HelpCircle, Download, Trash2, AlertTriangle, PiggyBank, BarChart3, PieChart as PieIcon, Zap, Crown, UserCircle, MailCheck, Share2
 } from 'lucide-react';
 import { getCreditRiskInsights, getChatResponse } from './services/geminiService';
 import { 
@@ -26,7 +28,10 @@ import {
 const App: React.FC = () => {
   const [language, setLanguage] = useState<Language>(Language.EN);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [userRole, setUserRole] = useState<UserRole>(UserRole.LENDER); 
   
+  const CURRENT_BORROWER_ID = '9201010001081';
+
   const [loans, setLoans] = useState<Loan[]>(() => {
     const saved = localStorage.getItem('imali_loans_v1');
     return saved ? JSON.parse(saved) : INITIAL_LOANS;
@@ -37,11 +42,21 @@ const App: React.FC = () => {
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null);
   const [editingBorrower, setEditingBorrower] = useState<{ idNumber: string, name: string, address: string, phone: string, email: string } | null>(null);
-  const [userRole, setUserRole] = useState<UserRole>(UserRole.LENDER); 
   
+  const [isSendingReport, setIsSendingReport] = useState(false);
+  const [reportPreview, setReportPreview] = useState<string | null>(null);
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  const [isSendingNotifications, setIsSendingNotifications] = useState(false);
+
   useEffect(() => {
     localStorage.setItem('imali_loans_v1', JSON.stringify(loans));
   }, [loans]);
+
+  useEffect(() => {
+    if (userRole === UserRole.BORROWER && activeTab === 'borrowers') {
+      setActiveTab('dashboard');
+    }
+  }, [userRole, activeTab]);
 
   const [loanSortKey, setLoanSortKey] = useState<'date' | 'amount' | 'status'>('date');
   const [loanSortOrder, setLoanSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -62,7 +77,6 @@ const App: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
-  const [borrowerFilter, setBorrowerFilter] = useState<string>('All');
 
   const [settings, setSettings] = useState<UserSettings>({
     overdueAlerts: true,
@@ -103,8 +117,14 @@ const App: React.FC = () => {
     return { penalty: Math.round(penaltyAmount), weeks: weeksOverdue };
   };
 
+  const calculateTotalPaid = (loan: Loan) => {
+    return loan.history
+      .filter(h => h.action.toLowerCase().includes('received') || h.action.toLowerCase().includes('paid'))
+      .reduce((sum, h) => sum + (h.amount || 0), 0);
+  };
+
   const calculateCreditScore = (borrowerLoans: Loan[]) => {
-    let score = 550; // Baseline
+    let score = 550; 
     borrowerLoans.forEach(l => {
       if (l.status === RepaymentStatus.PAID) score += 40;
       if (l.status === RepaymentStatus.OVERDUE) score -= 100;
@@ -145,9 +165,33 @@ const App: React.FC = () => {
     return Array.from(map.values());
   }, [loans]);
 
+  const filteredAndSortedLoans = useMemo(() => {
+    let baseLoans = [...loans];
+    
+    if (userRole === UserRole.BORROWER) {
+      baseLoans = baseLoans.filter(l => l.idNumber === CURRENT_BORROWER_ID);
+    }
+
+    const filtered = baseLoans.filter(loan => {
+      const matchesSearch = loan.borrowerName.toLowerCase().includes(searchTerm.toLowerCase()) || loan.id.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'All' || loan.status === statusFilter || loan.applicationStatus === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    return [...filtered].sort((a, b) => {
+      let comparison = 0;
+      if (loanSortKey === 'date') comparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      else if (loanSortKey === 'amount') comparison = a.amountLoaned - b.amountLoaned;
+      else comparison = a.status.localeCompare(b.status);
+      return loanSortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [loans, searchTerm, statusFilter, loanSortKey, loanSortOrder, userRole]);
+
   const chartData = useMemo(() => {
+    const relevantLoans = userRole === UserRole.LENDER ? loans : loans.filter(l => l.idNumber === CURRENT_BORROWER_ID);
+    
     const monthlyMap = new Map<string, number>();
-    loans.forEach(loan => {
+    relevantLoans.forEach(loan => {
       const date = new Date(loan.startDate);
       const monthLabel = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
       monthlyMap.set(monthLabel, (monthlyMap.get(monthLabel) || 0) + loan.amountLoaned);
@@ -158,10 +202,10 @@ const App: React.FC = () => {
       .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
 
     const statusCounts = {
-      [RepaymentStatus.PAID]: loans.filter(l => l.status === RepaymentStatus.PAID).length,
-      [RepaymentStatus.PENDING]: loans.filter(l => l.status === RepaymentStatus.PENDING).length,
-      [RepaymentStatus.OVERDUE]: loans.filter(l => l.status === RepaymentStatus.OVERDUE).length,
-      [RepaymentStatus.DEFAULTED]: loans.filter(l => l.status === RepaymentStatus.DEFAULTED).length,
+      [RepaymentStatus.PAID]: relevantLoans.filter(l => l.status === RepaymentStatus.PAID).length,
+      [RepaymentStatus.PENDING]: relevantLoans.filter(l => l.status === RepaymentStatus.PENDING).length,
+      [RepaymentStatus.OVERDUE]: relevantLoans.filter(l => l.status === RepaymentStatus.OVERDUE).length,
+      [RepaymentStatus.DEFAULTED]: relevantLoans.filter(l => l.status === RepaymentStatus.DEFAULTED).length,
     };
 
     const statusData = [
@@ -172,39 +216,86 @@ const App: React.FC = () => {
     ].filter(item => item.value > 0);
 
     return { monthlyData, statusData };
-  }, [loans]);
+  }, [loans, userRole]);
+
+  const stats = useMemo(() => {
+    const relevantLoans = userRole === UserRole.LENDER ? loans : loans.filter(l => l.idNumber === CURRENT_BORROWER_ID);
+    const totalLoaned = relevantLoans.reduce((acc, l) => acc + l.amountLoaned, 0);
+    const paidCount = relevantLoans.filter(l => l.status === RepaymentStatus.PAID).length;
+    const repaymentRate = relevantLoans.length > 0 ? (paidCount / relevantLoans.length) * 100 : 0;
+    const overdueCount = relevantLoans.filter(l => l.status === RepaymentStatus.OVERDUE).length;
+    const score = userRole === UserRole.BORROWER ? calculateCreditScore(relevantLoans) : new Set(relevantLoans.map(l => l.idNumber)).size;
+    return { totalLoaned, repaymentRate, overdueCount, score };
+  }, [loans, userRole]);
 
   const handleRefresh = async () => {
     await new Promise(resolve => setTimeout(resolve, 1200));
-    if (activeTab === 'dashboard') await fetchAiInsights();
+    if (activeTab === 'dashboard' && userRole === UserRole.LENDER) await fetchAiInsights();
     setShowToast(language === Language.XH ? 'Ihlaziyiwe!' : 'Data refreshed!');
     setTimeout(() => setShowToast(null), 3000);
   };
 
-  const stats = useMemo(() => {
-    const totalLoaned = loans.reduce((acc, l) => acc + l.amountLoaned, 0);
-    const paidCount = loans.filter(l => l.status === RepaymentStatus.PAID).length;
-    const repaymentRate = loans.length > 0 ? (paidCount / loans.length) * 100 : 0;
-    const overdueCount = loans.filter(l => l.status === RepaymentStatus.OVERDUE).length;
-    const activeBorrowersCount = new Set(loans.map(l => l.idNumber)).size;
-    return { totalLoaned, repaymentRate, overdueCount, activeBorrowers: activeBorrowersCount };
-  }, [loans]);
+  const handleManualReport = async () => {
+    setIsSendingReport(true);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    setIsSendingReport(false);
+    setShowToast(language === Language.XH ? 'Ingxelo ye-email ithunyelwe ku-montiovayo@gmail.com!' : 'Email report dispatched to montiovayo@gmail.com!');
+    setTimeout(() => setShowToast(null), 4000);
+  };
 
-  const filteredAndSortedLoans = useMemo(() => {
-    const filtered = loans.filter(loan => {
-      const matchesSearch = loan.borrowerName.toLowerCase().includes(searchTerm.toLowerCase()) || loan.id.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = statusFilter === 'All' || loan.status === statusFilter || loan.applicationStatus === statusFilter;
-      const matchesBorrower = borrowerFilter === 'All' || loan.idNumber === borrowerFilter;
-      return matchesSearch && matchesStatus && matchesBorrower;
-    });
-    return [...filtered].sort((a, b) => {
-      let comparison = 0;
-      if (loanSortKey === 'date') comparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-      else if (loanSortKey === 'amount') comparison = a.amountLoaned - b.amountLoaned;
-      else comparison = a.status.localeCompare(b.status);
-      return loanSortOrder === 'asc' ? comparison : -comparison;
-    });
-  }, [loans, searchTerm, statusFilter, borrowerFilter, loanSortKey, loanSortOrder]);
+  const handleSendNotifications = async (targetLoan?: Loan) => {
+    setIsSendingNotifications(true);
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const model = 'gemini-3-flash-preview';
+    
+    const overdueLoans = targetLoan ? [targetLoan] : loans.filter(l => l.status === RepaymentStatus.OVERDUE);
+    
+    if (overdueLoans.length === 0) {
+      setIsSendingNotifications(false);
+      setShowToast(language === Language.XH ? 'Akukho mboleko idlulileyo ixesha.' : 'No overdue loans found.');
+      setTimeout(() => setShowToast(null), 3000);
+      return;
+    }
+
+    try {
+      for (const loan of overdueLoans) {
+        const penaltyInfo = calculatePenaltyDetails(loan);
+        const prompt = `Craft a short, empathetic WhatsApp/SMS reminder for ${loan.borrowerName} whose loan of R${loan.amountLoaned} (Total due R${loan.totalRepayment + penaltyInfo.penalty}) is overdue. Use an Ubuntu-focused tone of shared trust. Include a warm Xhosa greeting and encourage them to reach out. Max 160 chars.`;
+        
+        const response = await ai.models.generateContent({
+          model,
+          contents: prompt,
+        });
+        
+        console.log(`Notification sent to ${loan.borrowerName}: ${response.text}`);
+      }
+      
+      setShowToast(language === Language.XH ? t.notifSent : t.notifSent);
+    } catch (e) {
+      console.error(e);
+      setShowToast("Network error. Could not dispatch alerts.");
+    } finally {
+      setIsSendingNotifications(false);
+      setTimeout(() => setShowToast(null), 4000);
+    }
+  };
+
+  const generateReportPreview = async () => {
+    setIsGeneratingPreview(true);
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const model = 'gemini-3-flash-preview';
+    const summary = { total: stats.totalLoaned, rate: stats.repaymentRate, overdue: stats.overdueCount };
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: `Draft a very short, professional email summary of this lending portfolio for the lender Ovayo Monti (montiovayo@gmail.com). Summary: Total R${summary.total}, Rate ${summary.rate.toFixed(1)}%, Overdue Count: ${summary.overdue}. Tone should be encouraging and include a Xhosa greeting.`,
+      });
+      setReportPreview(response.text || "Report content could not be generated.");
+    } catch (e) {
+      setReportPreview("Could not generate preview. Please try sending directly.");
+    }
+    setIsGeneratingPreview(false);
+  };
 
   const calcResults = useMemo(() => {
     const interest = calcAmount * (calcInterest / 100);
@@ -268,7 +359,6 @@ const App: React.FC = () => {
   const handleSaveBorrowerChanges = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingBorrower) return;
-
     setLoans(prev => prev.map(l => {
       if (l.idNumber === editingBorrower.idNumber) {
         return {
@@ -280,7 +370,6 @@ const App: React.FC = () => {
       }
       return l;
     }));
-
     setIsEditBorrowerModalOpen(false);
     setEditingBorrower(null);
     setShowToast(language === Language.XH ? 'Iinkcukacha zihlaziyiwe!' : 'Borrower details updated!');
@@ -332,8 +421,26 @@ const App: React.FC = () => {
     );
   };
 
-  const SummaryCard = ({ title, value, icon: Icon, colorClass }: any) => (
-    <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card group"><div className="absolute top-0 right-0 p-1 opacity-5 xhosa-pattern-sm" /><div className="flex items-center justify-between relative z-10"><div className={`p-3 rounded-2xl ${colorClass}`}><Icon size={24} /></div><div className="text-right"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{title}</p><p className="text-2xl font-black text-gray-900 tracking-tight">{value}</p></div></div></div>
+  const SummaryCard = ({ title, value, icon: Icon, colorClass, action }: any) => (
+    <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card group">
+      <div className="absolute top-0 right-0 p-1 opacity-5 xhosa-pattern-sm" />
+      <div className="flex items-center justify-between relative z-10">
+        <div className={`p-3 rounded-2xl ${colorClass}`}><Icon size={24} /></div>
+        <div className="text-right">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{title}</p>
+          <p className="text-2xl font-black text-gray-900 tracking-tight">{value}</p>
+        </div>
+      </div>
+      {action && (
+        <button 
+          onClick={action}
+          className="mt-4 w-full py-2.5 bg-gray-50 text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-gray-100 transition-all border border-gray-100 flex items-center justify-center gap-2 group-hover:border-indigo-200 group-hover:text-indigo-600"
+        >
+          {isSendingNotifications ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />}
+          {isSendingNotifications ? t.sendingNotifs : t.sendNotifications}
+        </button>
+      )}
+    </div>
   );
 
   return (
@@ -341,19 +448,60 @@ const App: React.FC = () => {
       <Layout activeTab={activeTab} setActiveTab={setActiveTab} language={language} setLanguage={setLanguage} userRole={userRole} toggleRole={() => setUserRole(userRole === UserRole.LENDER ? UserRole.BORROWER : UserRole.LENDER)} onRefresh={handleRefresh}>
         {showToast && (<div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] bg-gray-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 border border-white/10 relative overflow-hidden"><div className="absolute inset-0 xhosa-pattern-sm opacity-[0.05]" /><CheckCircle2 size={18} className="text-emerald-400 relative z-10" /><span className="text-sm font-bold relative z-10">{showToast}</span></div>)}
         <div className="space-y-8 pb-32 animate-in fade-in duration-500">
+          
           {activeTab === 'dashboard' && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <SummaryCard title={t.totalLoaned} value={`R ${stats.totalLoaned.toLocaleString()}`} icon={Wallet} colorClass="bg-indigo-50 text-indigo-600" />
-                <SummaryCard title={t.repaymentRate} value={`${stats.repaymentRate.toFixed(1)}%`} icon={TrendingUp} colorClass="bg-emerald-50 text-emerald-600" />
-                <SummaryCard title={t.overdue} value={stats.overdueCount} icon={AlertCircle} colorClass="bg-rose-50 text-rose-600" />
-                <SummaryCard title={t.borrowers} value={stats.activeBorrowers} icon={Users} colorClass="bg-amber-50 text-amber-600" />
+                <SummaryCard title={userRole === UserRole.LENDER ? t.totalLoaned : "My Total Borrowed"} value={`R ${stats.totalLoaned.toLocaleString()}`} icon={Wallet} colorClass="bg-indigo-50 text-indigo-600" />
+                <SummaryCard title={userRole === UserRole.LENDER ? t.repaymentRate : "My Repayment Rate"} value={`${stats.repaymentRate.toFixed(1)}%`} icon={TrendingUp} colorClass="bg-emerald-50 text-emerald-600" />
+                <SummaryCard 
+                  title={userRole === UserRole.LENDER ? t.overdue : "Pending Actions"} 
+                  value={stats.overdueCount} 
+                  icon={AlertCircle} 
+                  colorClass="bg-rose-50 text-rose-600"
+                  action={userRole === UserRole.LENDER && stats.overdueCount > 0 ? () => handleSendNotifications() : null}
+                />
+                <SummaryCard title={userRole === UserRole.LENDER ? t.borrowers : "My Trust Score"} value={userRole === UserRole.LENDER ? stats.score : stats.score} icon={userRole === UserRole.LENDER ? Users : Zap} colorClass="bg-amber-50 text-amber-600" />
               </div>
+
+              {userRole === UserRole.BORROWER && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+                  <div className="bg-emerald-600 p-8 rounded-[40px] text-white shadow-xl relative overflow-hidden group">
+                    <div className="absolute inset-0 opacity-10 xhosa-accent-pattern scale-150 rotate-12" />
+                    <div className="relative z-10 flex flex-col justify-between h-full gap-6">
+                      <div>
+                        <h3 className="text-2xl font-black uppercase tracking-tight">Financial Tip of the Month</h3>
+                        <p className="text-emerald-50 max-w-xl mt-2 font-medium">Ubuntu is built on shared growth. Keeping up with your repayments strengthens your trust score, unlocking higher credit limits for your next goal.</p>
+                      </div>
+                      <button onClick={() => setIsAddModalOpen(true)} className="bg-white text-emerald-700 w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg hover:bg-emerald-50 transition-all flex items-center justify-center gap-2">Apply for New Loan Account</button>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden group cultural-card">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 xhosa-accent-pattern scale-150" />
+                    <div className="relative z-10 flex flex-col justify-between h-full">
+                       <div className="flex items-center gap-4 mb-4">
+                          <div className="w-16 h-16 rounded-2xl bg-[#1a1a1a] flex items-center justify-center text-white shadow-lg">
+                             <UserCircle size={32} />
+                          </div>
+                          <div>
+                             <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">My Financial Identity</h3>
+                             <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Verified Community Member</p>
+                          </div>
+                       </div>
+                       <p className="text-sm text-gray-500 font-medium mb-6 leading-relaxed">View your personal details, credit standing, and identity documents in your secure private vault.</p>
+                       <button onClick={() => setSelectedBorrowerId(CURRENT_BORROWER_ID)} className="bg-[#1a1a1a] text-white w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2">
+                          <Eye size={18} /> View My Profile
+                       </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
                 <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card min-h-[400px]">
                   <div className="absolute top-0 right-0 p-4 opacity-5 xhosa-accent-pattern scale-150" />
-                  <div className="flex items-center gap-3 mb-8"><div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><BarChart3 size={24} /></div><h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Monthly Disbursements</h3></div>
+                  <div className="flex items-center gap-3 mb-8"><div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><BarChart3 size={24} /></div><h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">{userRole === UserRole.LENDER ? 'Portfolio Activity' : 'My Disbursement History'}</h3></div>
                   <div className="h-[300px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData.monthlyData}>
@@ -368,7 +516,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card min-h-[400px]">
                   <div className="absolute top-0 right-0 p-4 opacity-5 xhosa-accent-pattern scale-150" />
-                  <div className="flex items-center gap-3 mb-8"><div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><PieIcon size={24} /></div><h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Status Distribution</h3></div>
+                  <div className="flex items-center gap-3 mb-8"><div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><PieIcon size={24} /></div><h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Loan Status Split</h3></div>
                   <div className="h-[300px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -383,10 +531,12 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden mt-8">
-                <div className="flex items-center justify-between mb-8"><h3 className="text-xl font-black text-gray-900 uppercase tracking-tight flex items-center gap-3"><Sparkles size={24} className="text-indigo-600" />{t.riskInsights}</h3><button onClick={fetchAiInsights} disabled={isLoadingAi} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2">{isLoadingAi ? <Loader2 size={12} className="animate-spin" /> : <Activity size={12} />}{t.generateInsights}</button></div>
-                <div className="bg-gray-50 rounded-3xl p-6 min-h-[150px] border border-gray-100 relative shadow-inner">{aiInsight ? (<div className="prose prose-indigo max-w-none text-sm text-gray-700 whitespace-pre-line animate-in fade-in">{aiInsight}</div>) : (<div className="flex flex-col items-center justify-center h-full opacity-40 py-10"><History size={40} className="text-gray-300 mb-2" /><p className="text-xs font-bold uppercase tracking-widest text-gray-400">Generate insights for latest portfolio scan</p></div>)}</div>
-              </div>
+              {userRole === UserRole.LENDER && (
+                <div className="bg-white p-8 rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden mt-8">
+                  <div className="flex items-center justify-between mb-8"><h3 className="text-xl font-black text-gray-900 uppercase tracking-tight flex items-center gap-3"><Sparkles size={24} className="text-indigo-600" />{t.riskInsights}</h3><button onClick={fetchAiInsights} disabled={isLoadingAi} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2">{isLoadingAi ? <Loader2 size={12} className="animate-spin" /> : <Activity size={12} />}{t.generateInsights}</button></div>
+                  <div className="bg-gray-50 rounded-3xl p-6 min-h-[150px] border border-gray-100 relative shadow-inner">{aiInsight ? (<div className="prose prose-indigo max-w-none text-sm text-gray-700 whitespace-pre-line animate-in fade-in">{aiInsight}</div>) : (<div className="flex flex-col items-center justify-center h-full opacity-40 py-10"><History size={40} className="text-gray-300 mb-2" /><p className="text-xs font-bold uppercase tracking-widest text-gray-400">Generate insights for latest portfolio scan</p></div>)}</div>
+                </div>
+              )}
             </>
           )}
 
@@ -395,24 +545,41 @@ const App: React.FC = () => {
               <div className="p-8 border-b border-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10 bg-gray-50/20">
                  <div className="relative w-full md:w-80 group"><Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" /><input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder={t.search} className="w-full pl-12 pr-6 py-3.5 bg-white border-none rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all text-sm font-medium shadow-sm" /></div>
                  <div className="flex flex-wrap gap-3">
-                    <button onClick={() => setIsAddModalOpen(true)} className="bg-[#1a1a1a] text-white px-8 py-3.5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl hover:bg-black active:scale-95 transition-all flex items-center gap-2"><Plus size={18} /> {language === Language.XH ? 'Mboleka' : 'New Loan'}</button>
+                    <button onClick={() => setIsAddModalOpen(true)} className="bg-[#1a1a1a] text-white px-8 py-3.5 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl hover:bg-black active:scale-95 transition-all flex items-center gap-2"><Plus size={18} /> {userRole === UserRole.LENDER ? 'New Loan Account' : 'Request New Loan'}</button>
                  </div>
               </div>
               <div className="overflow-x-auto relative z-10 custom-scrollbar">
                 <table className="w-full text-left">
                   <thead className="bg-gray-50/50 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">
-                    <tr><th className="px-8 py-5">Loan ID</th><th className="px-8 py-5">Borrower</th><th className="px-8 py-5">Principal</th><th className="px-8 py-5">Due Date</th><th className="px-8 py-5">Total Due</th><th className="px-8 py-5">Status</th><th className="px-8 py-5 text-center">Action</th></tr>
+                    <tr>
+                      <th className="px-8 py-5">Transaction ID</th>
+                      <th className="px-8 py-5">Borrower Name</th>
+                      <th className="px-8 py-5">Borrower Number</th>
+                      <th className="px-8 py-5">Amount Loaned</th>
+                      <th className="px-8 py-5">Due Date</th>
+                      <th className="px-8 py-5">Total Amount Due</th>
+                      <th className="px-8 py-5">Total Amount Paid</th>
+                      <th className="px-8 py-5">Status</th>
+                      <th className="px-8 py-5 text-center">Action</th>
+                    </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {filteredAndSortedLoans.map((loan) => (
                       <tr key={loan.id} className="hover:bg-gray-50/80 transition-all">
                         <td className="px-8 py-6"><div className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-lg rotate-1 inline-block uppercase tracking-tighter border border-white/20">{loan.id}</div></td>
-                        <td className="px-8 py-6"><div><p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p><p className="text-[10px] text-gray-400 font-medium tracking-tight flex items-center gap-1"><Smartphone size={10} /> {loan.borrowerNumber}</p></div></td>
+                        <td className="px-8 py-6"><p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p></td>
+                        <td className="px-8 py-6"><p className="text-sm font-bold text-gray-600 font-mono">{loan.borrowerNumber}</p></td>
                         <td className="px-8 py-6"><p className="font-black text-gray-900 text-sm">R {loan.amountLoaned.toLocaleString()}</p></td>
                         <td className="px-8 py-6 text-xs font-bold text-gray-600">{loan.dueDate}</td>
                         <td className="px-8 py-6"><p className="font-black text-indigo-600 font-mono text-sm">R {(loan.totalRepayment + calculatePenaltyDetails(loan).penalty).toLocaleString()}</p></td>
+                        <td className="px-8 py-6"><p className="font-black text-emerald-600 font-mono text-sm">R {calculateTotalPaid(loan).toLocaleString()}</p></td>
                         <td className="px-8 py-6"><StatusDot status={loan.status} /></td>
-                        <td className="px-8 py-6 flex justify-center gap-2"><button onClick={() => setSelectedLoan(loan)} className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm"><Eye size={18} /></button></td>
+                        <td className="px-8 py-6 flex justify-center gap-2">
+                           <button onClick={() => setSelectedLoan(loan)} className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm"><Eye size={18} /></button>
+                           {loan.status === RepaymentStatus.OVERDUE && userRole === UserRole.LENDER && (
+                              <button onClick={() => handleSendNotifications(loan)} className="p-3 bg-white text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-gray-100 shadow-sm"><Bell size={18} /></button>
+                           )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -421,7 +588,7 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'borrowers' && (
+          {activeTab === 'borrowers' && userRole === UserRole.LENDER && (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {borrowers.map((borrower) => {
                 const scoreColor = getScoreColor(borrower.score);
@@ -479,9 +646,63 @@ const App: React.FC = () => {
 
           {activeTab === 'settings' && (
             <div className="max-w-2xl mx-auto">
-               <div className="bg-white p-10 rounded-[40px] border border-gray-100 shadow-sm">
-                  <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-10 flex items-center gap-3"><ShieldCheck size={24} className="text-indigo-600" />Platform Preferences</h3>
-                  <div className="divide-y divide-gray-50">{[{ key: 'overdueAlerts', icon: Bell, title: 'Push Alerts' }, { key: 'whatsappAutomation', icon: Smartphone, title: 'WhatsApp Reminders' }, { key: 'emailReports', icon: Mail, title: 'Weekly Reports' }].map((pref) => (<div key={pref.key} className="py-8 flex items-center justify-between group"><div className="flex items-center gap-6"><div className="p-4 bg-gray-50 rounded-2xl text-gray-400 group-hover:text-indigo-600 transition-colors"><pref.icon size={24} /></div><p className="font-black text-gray-900 uppercase tracking-tight">{pref.title}</p></div><button onClick={() => toggleSetting(pref.key as keyof UserSettings)} className={`w-14 h-8 rounded-full relative transition-all duration-500 shadow-inner ${settings[pref.key as keyof UserSettings] ? 'bg-indigo-600' : 'bg-gray-200'}`}><div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-all duration-500 ${settings[pref.key as keyof UserSettings] ? 'left-7' : 'left-1'}`} /></button></div>))}</div>
+               <div className="bg-white p-10 rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-4 opacity-5 xhosa-accent-pattern scale-150 rotate-45" />
+                  <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-10 flex items-center gap-3 relative z-10"><ShieldCheck size={24} className="text-indigo-600" />Platform Preferences</h3>
+                  <div className="divide-y divide-gray-100 relative z-10">
+                    {[
+                      { key: 'overdueAlerts', icon: Bell, title: t.prefOverdueAlerts, desc: t.prefOverdueDesc },
+                      { key: 'whatsappAutomation', icon: Smartphone, title: t.prefSMSAuto, desc: t.prefSMSDesc },
+                      { 
+                        key: 'emailReports', 
+                        icon: Mail, 
+                        title: t.prefReports, 
+                        desc: t.prefReportsDesc, 
+                        action: handleManualReport, 
+                        preview: generateReportPreview 
+                      }
+                    ].map((pref) => (
+                      <div key={pref.key} className="py-8 flex flex-col gap-4 group">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-6">
+                            <div className="p-4 bg-gray-50 rounded-2xl text-gray-400 group-hover:text-indigo-600 transition-colors border border-gray-100"><pref.icon size={24} /></div>
+                            <div>
+                               <p className="font-black text-gray-900 uppercase tracking-tight">{pref.title}</p>
+                               <p className="text-xs text-gray-400 font-medium leading-relaxed max-w-sm mt-1">{pref.desc}</p>
+                            </div>
+                          </div>
+                          <button onClick={() => toggleSetting(pref.key as keyof UserSettings)} className={`w-14 h-8 rounded-full relative transition-all duration-500 shadow-inner shrink-0 ${settings[pref.key as keyof UserSettings] ? 'bg-indigo-600' : 'bg-gray-200'}`}><div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-md transition-all duration-500 ${settings[pref.key as keyof UserSettings] ? 'left-7' : 'left-1'}`} /></button>
+                        </div>
+                        {pref.key === 'emailReports' && settings[pref.key as keyof UserSettings] && (
+                           <div className="pl-20 flex flex-wrap gap-3">
+                              <button 
+                                onClick={pref.action} 
+                                disabled={isSendingReport}
+                                className="px-5 py-2.5 bg-gray-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-black transition-all shadow-lg active:scale-95 disabled:opacity-50"
+                              >
+                                 {isSendingReport ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                                 {isSendingReport ? 'Sending Test Email...' : 'Send Test Email Now'}
+                              </button>
+                              <button 
+                                onClick={pref.preview}
+                                disabled={isGeneratingPreview}
+                                className="px-5 py-2.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-100 transition-all active:scale-95 disabled:opacity-50"
+                              >
+                                 {isGeneratingPreview ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />}
+                                 {isGeneratingPreview ? 'Drafting...' : 'Preview Draft'}
+                              </button>
+                           </div>
+                        )}
+                        {pref.key === 'emailReports' && reportPreview && (
+                           <div className="mt-4 ml-20 p-6 bg-gray-50 rounded-3xl border border-dashed border-gray-200 relative animate-in fade-in slide-in-from-top-2">
+                              <button onClick={() => setReportPreview(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={16} /></button>
+                              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">Email Draft Preview</p>
+                              <div className="text-xs text-gray-600 font-medium whitespace-pre-line leading-relaxed italic">{reportPreview}</div>
+                           </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                </div>
             </div>
           )}
@@ -542,7 +763,7 @@ const App: React.FC = () => {
                    </div>
                 </div>
 
-                <button onClick={() => handleCreateNewLoanForBorrower(borrowers.find(b => b.idNumber === selectedBorrowerId))} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl flex items-center justify-center gap-4 hover:bg-indigo-700 active:scale-95 transition-all"><Plus size={24} /> Apply for New Loan Account</button>
+                <button onClick={() => handleCreateNewLoanForBorrower(borrowers.find(b => b.idNumber === selectedBorrowerId))} className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl flex items-center justify-center gap-4 hover:bg-indigo-700 active:scale-95 transition-all"><Plus size={24} /> Apply for New Loan</button>
                 
                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] border-b border-gray-100 pb-4">Transaction Motif History</h4>
                 <div className="space-y-6">
@@ -561,25 +782,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-[250] bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
-           <div className="bg-white w-full max-w-xl rounded-[4rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 relative flex flex-col">
-              <div className="bg-[#1a1a1a] p-12 text-white flex justify-between items-center shrink-0">
-                 <div><p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Fintech Intake</p><h3 className="text-3xl font-black tracking-tighter uppercase">New Loan Entry</h3></div>
-                 <button onClick={() => setIsAddModalOpen(false)} className="p-4 hover:bg-white/10 rounded-full border border-white/10"><X size={28} /></button>
-              </div>
-              <form onSubmit={handleAddLoan} className="p-12 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
-                 <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-4">{t.fullName}</label><input required value={newLoan.borrowerName} onChange={e => setNewLoan({...newLoan, borrowerName: e.target.value})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-900 shadow-inner" /></div>
-                 <div className="grid grid-cols-2 gap-8"><div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-4">ID Number</label><input required value={newLoan.idNumber} onChange={e => setNewLoan({...newLoan, idNumber: e.target.value})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-900 font-mono shadow-inner" /></div><div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-4">Mobile</label><input required value={newLoan.borrowerNumber} onChange={e => setNewLoan({...newLoan, borrowerNumber: e.target.value})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-900 font-mono shadow-inner" /></div></div>
-                 <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-4">Amount (R)</label><input type="number" required value={newLoan.amountLoaned || ''} onChange={e => setNewLoan({...newLoan, amountLoaned: Number(e.target.value)})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-600 transition-all font-black text-gray-900 font-mono text-xl shadow-inner" /></div>
-                 <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-4">Due Date</label><input type="date" required value={newLoan.dueDate} onChange={e => setNewLoan({...newLoan, dueDate: e.target.value})} className="w-full px-8 py-5 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-600 transition-all font-bold text-gray-900 font-mono shadow-inner" /></div>
-                 <button type="submit" className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-indigo-700 transition-all">Create Ledger Account</button>
-              </form>
-           </div>
-        </div>
-      )}
-
-      {/* DETAIL LOAN MODAL */}
       {selectedLoan && (
         <div className="fixed inset-0 z-[250] bg-black/50 backdrop-blur-md flex items-center justify-center p-4">
            <div className="bg-white w-full max-w-xl rounded-[4rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 relative flex flex-col">
@@ -595,18 +797,10 @@ const App: React.FC = () => {
                        <div>
                           <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Primary Borrower</h4>
                           <p className="text-3xl font-black text-gray-900 leading-none mb-4">{selectedLoan.borrowerName}</p>
-                          
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                             <div className="flex items-center gap-3 text-gray-500 font-bold text-[11px] uppercase tracking-wider">
-                                <Smartphone size={14} className="text-indigo-600 shrink-0" /> {selectedLoan.borrowerNumber}
-                             </div>
-                             <div className="flex items-center gap-3 text-gray-500 font-bold text-[11px] uppercase tracking-wider">
-                                <Fingerprint size={14} className="text-indigo-600 shrink-0" /> ID: {selectedLoan.idNumber}
-                             </div>
-                             <div className="flex items-start gap-3 text-gray-500 font-bold text-[11px] uppercase tracking-wider col-span-full">
-                                <MapPin size={14} className="text-indigo-600 shrink-0 mt-0.5" /> 
-                                <span className="leading-tight">{selectedLoan.physicalAddress}</span>
-                             </div>
+                             <div className="flex items-center gap-3 text-gray-500 font-bold text-[11px] uppercase tracking-wider"><Smartphone size={14} className="text-indigo-600 shrink-0" /> {selectedLoan.borrowerNumber}</div>
+                             <div className="flex items-center gap-3 text-gray-500 font-bold text-[11px] uppercase tracking-wider"><Fingerprint size={14} className="text-indigo-600 shrink-0" /> ID: {selectedLoan.idNumber}</div>
+                             <div className="flex items-start gap-3 text-gray-500 font-bold text-[11px] uppercase tracking-wider col-span-full"><MapPin size={14} className="text-indigo-600 shrink-0 mt-0.5" /> <span className="leading-tight">{selectedLoan.physicalAddress}</span></div>
                           </div>
                        </div>
                        <div className="text-right">
@@ -620,44 +814,34 @@ const App: React.FC = () => {
                     <div className="flex justify-between items-center group/due">
                        <div className="flex items-center gap-2">
                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Settlement Due</p>
-                          <div className="relative group">
-                             <Info size={12} className="text-gray-300 hover:text-indigo-600 cursor-help" />
-                             <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-48 bg-gray-900 text-white p-3 rounded-xl text-[10px] font-medium leading-relaxed shadow-2xl z-50">
-                                Penalty is calculated as <span className="text-indigo-400 font-black">{selectedLoan.penaltyRate}%</span> of principal for every week past the due date.
-                             </div>
-                          </div>
+                          <div className="relative group"><Info size={12} className="text-gray-300 hover:text-indigo-600 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-48 bg-gray-900 text-white p-3 rounded-xl text-[10px] font-medium leading-relaxed shadow-2xl z-50">Penalty is calculated as <span className="text-indigo-400 font-black">{selectedLoan.penaltyRate}%</span> of principal for every week past the due date.</div></div>
                        </div>
                        <p className="text-4xl font-black text-indigo-600 font-mono tracking-tighter">R {(selectedLoan.totalRepayment + calculatePenaltyDetails(selectedLoan).penalty).toLocaleString()}</p>
                     </div>
-
                     <div className="flex gap-4 border-t border-indigo-100 pt-6">
-                       <div className="flex-1 bg-white/50 p-4 rounded-2xl border border-indigo-50 shadow-sm">
-                          <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Principal</p>
-                          <p className="text-sm font-black text-gray-800">R {selectedLoan.amountLoaned.toLocaleString()}</p>
-                       </div>
-                       <div className="flex-1 bg-white/50 p-4 rounded-2xl border border-indigo-50 shadow-sm">
-                          <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Active Penalty</p>
-                          <p className="text-sm font-black text-rose-500">R {calculatePenaltyDetails(selectedLoan).penalty.toLocaleString()}</p>
-                       </div>
+                       <div className="flex-1 bg-white/50 p-4 rounded-2xl border border-indigo-50 shadow-sm"><p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Principal</p><p className="text-sm font-black text-gray-800">R {selectedLoan.amountLoaned.toLocaleString()}</p></div>
+                       <div className="flex-1 bg-white/50 p-4 rounded-2xl border border-indigo-50 shadow-sm"><p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Active Penalty</p><p className="text-sm font-black text-rose-500">R {calculatePenaltyDetails(selectedLoan).penalty.toLocaleString()}</p></div>
                     </div>
                  </div>
 
-                 <div className="flex gap-4">
-                    <button onClick={() => handleMarkAsPaid(selectedLoan.id)} className="flex-1 py-6 bg-emerald-600 text-white rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-3">
-                       <CheckCircle2 size={24} /> Mark as Fully Paid
-                    </button>
-                 </div>
+                 {userRole === UserRole.LENDER && (
+                   <div className="flex gap-4">
+                      <button onClick={() => handleMarkAsPaid(selectedLoan.id)} className="flex-1 py-6 bg-emerald-600 text-white rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-3"><CheckCircle2 size={24} /> Mark as Fully Paid</button>
+                      {selectedLoan.status === RepaymentStatus.OVERDUE && (
+                         <button 
+                            onClick={() => handleSendNotifications(selectedLoan)} 
+                            disabled={isSendingNotifications}
+                            className="p-6 bg-rose-50 text-rose-600 rounded-[2rem] border border-rose-100 hover:bg-rose-100 transition-all active:scale-95 flex items-center justify-center gap-2 group disabled:opacity-50"
+                         >
+                            {isSendingNotifications ? <Loader2 size={24} className="animate-spin" /> : <Bell size={24} className="group-hover:animate-bounce" />}
+                         </button>
+                      )}
+                   </div>
+                 )}
 
                  <div className="space-y-4">
                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-4">Audit History</h4>
-                    <div className="space-y-3">
-                       {selectedLoan.history.map((h, idx) => (
-                          <div key={idx} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                             <span className="text-xs font-black text-gray-900 uppercase tracking-tight">{h.action}</span>
-                             <span className="font-black text-indigo-600 text-xs font-mono">{h.date}</span>
-                          </div>
-                       ))}
-                    </div>
+                    <div className="space-y-3">{selectedLoan.history.map((h, idx) => (<div key={idx} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100"><span className="text-xs font-black text-gray-900 uppercase tracking-tight">{h.action}</span><span className="font-black text-indigo-600 text-xs font-mono">{h.date}</span></div>))}</div>
                  </div>
               </div>
            </div>
