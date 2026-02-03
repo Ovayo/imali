@@ -73,7 +73,7 @@ const App: React.FC = () => {
   const [showToast, setShowToast] = useState<string | null>(null);
 
   const [calcAmount, setCalcAmount] = useState<number>(1000);
-  const [calcInterest, setCalcInterest] = useState<number>(DEFAULT_INTEREST_RATE);
+  const [calcInterest] = useState<number>(DEFAULT_INTEREST_RATE);
   const [calcWeeks, setCalcWeeks] = useState<number>(2);
 
   const calcResults = useMemo(() => {
@@ -93,6 +93,7 @@ const App: React.FC = () => {
     emailReports: true,
     emailNewAppAlerts: true,
     emailOverdueAlerts: true,
+    // Fix: Removed invalid type assignment in object literal for darkMode property
     darkMode: false
   });
 
@@ -530,7 +531,7 @@ const App: React.FC = () => {
          </div>
          {showLenderAuthModal && (
             <div className="fixed inset-0 z-[500] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 md:p-6">
-               <div className="bg-white w-full max-w-sm rounded-[2.5rem] md:rounded-[3rem] p-8 md:p-10 shadow-2xl space-y-6 md:space-y-8 animate-in zoom-in-95 duration-300">
+               <div className="bg-white w-full max-sm rounded-[2.5rem] md:rounded-[3rem] p-8 md:p-10 shadow-2xl space-y-6 md:space-y-8 animate-in zoom-in-95 duration-300">
                   <div className="text-center space-y-2"><div className="w-14 h-14 md:w-16 md:h-16 bg-gray-900 rounded-2xl flex items-center justify-center text-white mx-auto shadow-xl"><Shield size={28} className="md:w-8 md:h-8" /></div><h3 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight uppercase">Lender Key</h3><p className="text-[10px] text-gray-500 font-medium uppercase tracking-widest">Verification Required</p></div>
                   <form onSubmit={handleLenderAuthSubmit} className="space-y-6">
                      <div className="space-y-1"><label className="text-[9px] font-black text-gray-400 uppercase tracking-widest pl-4">Access Code</label><input type="password" autoFocus placeholder="••••••••" value={lenderAuthInput} onChange={e => setLenderAuthInput(e.target.value)} className={`w-full px-6 py-4 md:py-5 bg-gray-50 border-none rounded-2xl md:rounded-3xl focus:ring-2 transition-all font-bold text-gray-900 text-center text-lg md:text-xl tracking-widest shadow-inner ${lenderAuthError ? 'ring-2 ring-rose-500 bg-rose-50' : 'focus:ring-indigo-600'}`} /></div>
@@ -577,8 +578,8 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mt-6 md:mt-8">
                   <div className="bg-emerald-600 p-6 md:p-8 rounded-[2.5rem] md:rounded-[40px] text-white shadow-2xl relative overflow-hidden group min-h-[300px] md:min-h-[350px] flex flex-col justify-between transition-all duration-500 hover:shadow-emerald-500/20">
                     <div 
-                      className="absolute inset-0 opacity-50 mix-blend-multiply bg-cover bg-center transition-all duration-[2000ms] group-hover:scale-105 group-hover:opacity-60" 
-                      style={{ backgroundImage: `url('https://loremflickr.com/1200/800/${encodeURIComponent(currentBorrowerCity + ",landmark")}/all')` }} 
+                      className="absolute inset-0 opacity-60 mix-blend-multiply bg-cover bg-top transition-all duration-[2000ms] group-hover:scale-105 group-hover:opacity-70" 
+                      style={{ backgroundImage: `url('https://images.unsplash.com/photo-1523805009345-7448845a9e53?q=80&w=1200&auto=format&fit=crop')` }} 
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-emerald-900/80 via-transparent to-emerald-600/20 pointer-events-none" />
                     <div className="absolute inset-0 opacity-15 xhosa-accent-pattern scale-150 rotate-12 pointer-events-none" />
