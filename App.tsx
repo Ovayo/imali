@@ -10,7 +10,7 @@ import {
   ArrowRight, Wallet, ChevronRight, History, Info, X, Edit2, Loader2, Eye, MapPin, Fingerprint, 
   Key, Lock, UserCircle, ReceiptText, Zap, AlertTriangle,
   Shield, Users, BarChart3, Send, Info as InfoIcon, Sun, Cloud, CloudRain, Thermometer, Wind, Droplets,
-  Calendar, Percent, Scale, Calculator, Settings, RefreshCw
+  Calendar, Percent, Scale, Calculator, Settings, RefreshCw, Trash2
 } from 'lucide-react';
 import { 
   DEFAULT_INTEREST_RATE, 
@@ -344,6 +344,22 @@ const App: React.FC = () => {
     setTimeout(() => setShowToast(null), 4000);
   };
 
+  const handleDeleteLoan = (loanId: string) => {
+    if (window.confirm(language === Language.XH ? 'Uqinisekile ufuna ukucima le mboleko?' : 'Are you sure you want to delete this loan record?')) {
+      setLoans(prev => prev.filter(l => l.id !== loanId));
+      setShowToast(language === Language.XH ? 'Imboleko icinyiwe!' : 'Loan record deleted!');
+      setTimeout(() => setShowToast(null), 3000);
+    }
+  };
+
+  const handleDeleteBorrower = (idNumber: string) => {
+    if (window.confirm(language === Language.XH ? 'Uqinisekile ufuna ukucima lo mboleki nayo yonke imbali yakhe?' : 'Delete this borrower and ALL associated loan history? This cannot be undone.')) {
+      setLoans(prev => prev.filter(l => l.idNumber !== idNumber));
+      setShowToast(language === Language.XH ? 'Umboleki ucinyiwe!' : 'Borrower and history deleted!');
+      setTimeout(() => setShowToast(null), 3000);
+    }
+  };
+
   const handleMarkAsPaid = (loanId: string) => {
     setLoans(prev => prev.map(l => {
       if (l.id === loanId) {
@@ -556,8 +572,8 @@ const App: React.FC = () => {
               
               <div className="md:hidden divide-y divide-gray-50">
                 {filteredAndSortedLoans.map((loan) => (
-                  <div key={loan.id} onClick={() => setSelectedLoan(loan)} className="p-6 active:bg-gray-50 transition-colors flex justify-between items-center group">
-                    <div className="space-y-2">
+                  <div key={loan.id} className="p-6 active:bg-gray-50 transition-colors flex justify-between items-center group">
+                    <div onClick={() => setSelectedLoan(loan)} className="space-y-2 flex-1 cursor-pointer">
                       <div className="flex items-center gap-2">
                         <div className="bg-indigo-600 text-white text-[8px] font-black px-2 py-0.5 rounded shadow-sm">{loan.id}</div>
                         <StatusDot status={loan.status} />
@@ -565,9 +581,16 @@ const App: React.FC = () => {
                       <p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p>
                       <p className="text-[10px] font-bold text-gray-400 font-mono">DUE: {loan.dueDate}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex flex-col items-end gap-2">
                       <p className="text-sm font-black text-gray-900">R {loan.amountLoaned.toLocaleString()}</p>
-                      <ChevronRight size={16} className="ml-auto mt-2 text-gray-300 group-active:text-indigo-600" />
+                      <div className="flex gap-2">
+                        {userRole === UserRole.LENDER && (
+                          <button onClick={() => handleDeleteLoan(loan.id)} className="p-2 text-rose-400 hover:text-rose-600 transition-colors">
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                        <ChevronRight onClick={() => setSelectedLoan(loan)} size={16} className="text-gray-300 group-active:text-indigo-600 cursor-pointer" />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -609,6 +632,11 @@ const App: React.FC = () => {
                           <button onClick={() => setSelectedLoan(loan)} className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm">
                             <Eye size={18} />
                           </button>
+                          {userRole === UserRole.LENDER && (
+                            <button onClick={() => handleDeleteLoan(loan.id)} className="p-3 bg-white text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-gray-100 shadow-sm">
+                              <Trash2 size={18} />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -622,7 +650,6 @@ const App: React.FC = () => {
             <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8 duration-700">
               <div className="flex items-center gap-4 mb-8">
                 <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg">
-                  {/* Fix: Added missing Calculator icon import */}
                   <Calculator size={32} />
                 </div>
                 <div>
@@ -637,7 +664,6 @@ const App: React.FC = () => {
                   <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 relative overflow-hidden h-full">
                     <div className="absolute top-0 right-0 p-4 opacity-5 xhosa-pattern-sm" />
                     <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-8 flex items-center gap-2">
-                      {/* Fix: Added missing Settings icon import */}
                       <Settings size={20} className="text-indigo-600" /> 
                       {language === Language.EN ? 'Configure Motif' : 'Seta iinkcukacha'}
                     </h3>
@@ -696,7 +722,6 @@ const App: React.FC = () => {
                         
                         <div className="space-y-4">
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                            {/* Fix: Added missing RefreshCw icon import */}
                             <RefreshCw size={14} /> {language === Language.EN ? 'Frequency' : 'Amaxesha'}
                           </label>
                           <select 
@@ -832,6 +857,9 @@ const App: React.FC = () => {
                         <div className="flex gap-2">
                           <button onClick={() => handleEditBorrower(borrower)} className="p-2 bg-gray-50 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all border border-gray-100 shadow-sm">
                             <Edit2 size={12} />
+                          </button>
+                          <button onClick={() => handleDeleteBorrower(borrower.idNumber)} className="p-2 bg-gray-50 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all border border-gray-100 shadow-sm">
+                            <Trash2 size={12} />
                           </button>
                         </div>
                       </div>
