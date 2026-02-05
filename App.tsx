@@ -1,16 +1,16 @@
-
 import * as React from 'react';
 import { useState, useMemo, useEffect } from 'react';
 import Layout from './components/Layout';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
 import { Loan, RepaymentStatus, PayoutMethod, Language, UserSettings, UserRole, ApplicationStatus } from './types';
 import { 
   TrendingUp, AlertCircle, CheckCircle2, Plus, Smartphone, ShieldCheck, Bell, Mail, Save, Search, 
   ArrowRight, Wallet, ChevronRight, History, Info, X, Edit2, Loader2, Eye, MapPin, Fingerprint, 
   Key, Lock, UserCircle, ReceiptText, Zap, AlertTriangle,
-  Shield, Users, BarChart3, Send, Info as InfoIcon, Sun, Cloud, CloudRain, Thermometer, Wind, Droplets
+  Shield, Users, BarChart3, Send, Info as InfoIcon, Sun, Cloud, CloudRain, Thermometer, Wind, Droplets,
+  Calendar, Percent, Scale, Calculator, Settings, RefreshCw
 } from 'lucide-react';
 import { 
   DEFAULT_INTEREST_RATE, 
@@ -63,10 +63,8 @@ const App: React.FC = () => {
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   
-  // Simulated Weather State (In a real app, this would be fetched from an API)
+  // Simulated Weather State
   const [currentWeather, setCurrentWeather] = useState<keyof typeof WEATHER_THEMES>('sunny');
-
-  // Fix: Defining 'theme' based on 'currentWeather' state to solve scope errors.
   const theme = WEATHER_THEMES[currentWeather];
 
   const [showLenderAuthModal, setShowLenderAuthModal] = useState(false);
@@ -88,6 +86,58 @@ const App: React.FC = () => {
   
   const [isSendingReport, setIsSendingReport] = useState(false);
   const [isSendingNotifications, setIsSendingNotifications] = useState(false);
+
+  // Advanced Calculator States
+  const [calcAmount, setCalcAmount] = useState<number>(2500);
+  const [calcInterest, setCalcInterest] = useState<number>(30);
+  const [calcWeeks, setCalcWeeks] = useState<number>(4);
+  const [calcFrequency, setCalcFrequency] = useState<'weekly' | 'fortnightly' | 'monthly'>('weekly');
+
+  const t = TRANSLATIONS[language];
+
+  const calcResults = useMemo(() => {
+    const interest = Math.round(calcAmount * (calcInterest / 100));
+    const total = calcAmount + interest;
+    
+    // Calculate installments
+    let numInstallments = 1;
+    let daysStep = 7;
+    
+    if (calcFrequency === 'weekly') {
+      numInstallments = calcWeeks;
+      daysStep = 7;
+    } else if (calcFrequency === 'fortnightly') {
+      numInstallments = Math.max(1, Math.floor(calcWeeks / 2));
+      daysStep = 14;
+    } else {
+      numInstallments = Math.max(1, Math.floor(calcWeeks / 4));
+      daysStep = 30;
+    }
+
+    const perInstallment = Math.round(total / numInstallments);
+    
+    const schedule = Array.from({ length: numInstallments }).map((_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() + (i + 1) * daysStep);
+      return {
+        installment: i + 1,
+        date: date.toISOString().split('T')[0],
+        amount: perInstallment
+      };
+    });
+
+    return {
+      interest,
+      total,
+      perInstallment,
+      numInstallments,
+      schedule,
+      pieData: [
+        { name: 'Principal', value: calcAmount, color: '#1a1a1a' },
+        { name: 'Interest', value: interest, color: '#4f46e5' }
+      ]
+    };
+  }, [calcAmount, calcInterest, calcWeeks, calcFrequency]);
 
   useEffect(() => {
     const steps = [
@@ -121,25 +171,9 @@ const App: React.FC = () => {
     }
   }, [userRole, activeTab]);
 
-  const [loanSortKey] = useState<'date' | 'amount' | 'status'>('date');
-  const [loanSortOrder] = useState<'asc' | 'desc'>('desc');
-
-  const [showToast, setShowToast] = useState<string | null>(null);
-
-  const [calcAmount, setCalcAmount] = useState<number>(1000);
-  const [calcInterest, setCalcInterest] = useState<number>(DEFAULT_INTEREST_RATE);
-  const [calcWeeks, setCalcWeeks] = useState<number>(2);
-
-  const calcResults = useMemo(() => {
-    const interest = Math.round(calcAmount * (calcInterest / 100));
-    return {
-      interest,
-      total: calcAmount + interest
-    };
-  }, [calcAmount, calcInterest]);
-
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter] = useState<string>('All');
+  const [showToast, setShowToast] = useState<string | null>(null);
 
   const [settings, setSettings] = useState<UserSettings>({
     overdueAlerts: true,
@@ -153,22 +187,6 @@ const App: React.FC = () => {
   const toggleSetting = (key: keyof UserSettings) => {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
   };
-
-  const [newLoan, setNewLoan] = useState<Partial<Loan>>({
-    borrowerName: '',
-    idNumber: '',
-    physicalAddress: '',
-    borrowerNumber: '',
-    email: '',
-    amountLoaned: 0,
-    dueDate: '',
-    payoutMethod: PayoutMethod.MOBILE,
-    employer: '',
-    bankDetails: '',
-    notes: '' 
-  });
-
-  const t = TRANSLATIONS[language];
 
   const calculatePenaltyDetails = (loan: Loan) => {
     if (loan.status !== RepaymentStatus.OVERDUE) return { penalty: 0, weeks: 0 };
@@ -262,13 +280,9 @@ const App: React.FC = () => {
       return matchesSearch && matchesStatus;
     });
     return [...filtered].sort((a, b) => {
-      let comparison = 0;
-      if (loanSortKey === 'date') comparison = new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-      else if (loanSortKey === 'amount') comparison = a.amountLoaned - b.amountLoaned;
-      else comparison = a.status.localeCompare(b.status);
-      return loanSortOrder === 'asc' ? comparison : -comparison;
+      return new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime();
     });
-  }, [loans, searchTerm, statusFilter, loanSortKey, loanSortOrder, userRole, loggedInBorrowerId]);
+  }, [loans, searchTerm, statusFilter, userRole, loggedInBorrowerId]);
 
   const activeLoansForDashboard = useMemo(() => {
     const relevant = userRole === UserRole.BORROWER 
@@ -342,7 +356,6 @@ const App: React.FC = () => {
       }
       return l;
     }));
-    if (selectedLoan?.id === loanId) setSelectedLoan(null);
     setShowToast(language === Language.XH ? 'Intlawulo ifunyenwe!' : 'Payment recorded!');
     setTimeout(() => setShowToast(null), 3000);
   };
@@ -358,110 +371,10 @@ const App: React.FC = () => {
     setIsEditBorrowerModalOpen(true);
   };
 
-  const handleSaveBorrowerChanges = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingBorrower) return;
-    setLoans(prev => prev.map(l => {
-      if (l.idNumber === editingBorrower.idNumber) {
-        return {
-          ...l,
-          borrowerName: editingBorrower.name,
-          borrowerNumber: editingBorrower.phone,
-          physicalAddress: editingBorrower.address,
-          email: editingBorrower.email
-        };
-      }
-      return l;
-    }));
-    setIsEditBorrowerModalOpen(false);
-    setEditingBorrower(null);
-    setShowToast(language === Language.XH ? 'Iinkcukacha zihlaziyiwe!' : 'Borrower details updated!');
-    setTimeout(() => setShowToast(null), 3000);
-  };
-
-  const handleLoginSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError(null);
-    const identifier = loginIdentifier.trim().toLowerCase();
-    const borrower = borrowers.find(b => 
-      b.idNumber.toLowerCase() === identifier || 
-      b.phone.replace(/\s+/g, '') === identifier.replace(/\s+/g, '')
-    );
-    if (borrower) {
-      setLoggedInBorrowerId(borrower.idNumber);
-      setLoginIdentifier('');
-      setShowToast(language === Language.XH ? `Wamkelekile!` : `Welcome back!`);
-    } else {
-      setLoginError(language === Language.XH ? 'Iinkcukacha azifumaneki.' : 'No account found.');
-    }
-    setTimeout(() => setShowToast(null), 3000);
-  };
-
-  const handleRegisterBorrower = (e: React.FormEvent) => {
-    e.preventDefault();
-    const existing = borrowers.find(b => b.idNumber === newLoan.idNumber);
-    if (existing) {
-       setLoginError(language === Language.XH ? 'Le ID sele ibhaliswe.' : 'This ID is already registered.');
-       return;
-    }
-    const id = `TXN-NEW-${Math.floor(1000 + Math.random() * 9000)}`;
-    const regBorrower: Loan = {
-      id,
-      borrowerName: newLoan.borrowerName || 'New User',
-      idNumber: newLoan.idNumber || '',
-      physicalAddress: newLoan.physicalAddress || '',
-      borrowerNumber: newLoan.borrowerNumber || '',
-      email: newLoan.email || '',
-      payoutMethod: PayoutMethod.MOBILE,
-      amountLoaned: 0,
-      interestRate: DEFAULT_INTEREST_RATE,
-      penaltyRate: DEFAULT_PENALTY_RATE,
-      totalRepayment: 0,
-      startDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date().toISOString().split('T')[0],
-      status: RepaymentStatus.PAID, 
-      applicationStatus: ApplicationStatus.APPROVED,
-      notes: 'Registration Account',
-      history: [{ date: new Date().toISOString().split('T')[0], action: 'Profile Registered', amount: 0 }]
-    };
-    setLoans(prev => [...prev, regBorrower]);
-    setLoggedInBorrowerId(regBorrower.idNumber);
-    setShowRegisterForm(false);
-    setNewLoan({ borrowerName: '', idNumber: '', physicalAddress: '', borrowerNumber: '', email: '' });
-    setShowToast(language === Language.XH ? 'Ibhaliswe ngempumelelo!' : 'Registered successfully!');
-    setTimeout(() => setShowToast(null), 3000);
-  };
-
-  const handleCreateNewLoanForBorrower = (borrower: any) => {
-    setSelectedBorrowerId(null);
-    setNewLoan({
-      borrowerName: borrower.name,
-      idNumber: borrower.idNumber,
-      borrowerNumber: borrower.phone,
-      physicalAddress: borrower.address,
-      email: borrower.email,
-      payoutMethod: PayoutMethod.MOBILE
-    });
-    setIsAddModalOpen(true);
-  };
-
   const handleLogout = () => {
     setLoggedInBorrowerId(null);
-    setShowRegisterForm(false);
     setLoginIdentifier('');
     setLoginError(null);
-  };
-
-  const handleLenderAuthSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (lenderAuthInput === LENDER_PASSWORD) {
-      setUserRole(UserRole.LENDER);
-      setShowLenderAuthModal(false);
-      setLenderAuthInput('');
-      setLenderAuthError(false);
-    } else {
-      setLenderAuthError(true);
-    }
   };
 
   const StatusDot = ({ status, showLabel = false }: { status: RepaymentStatus, showLabel?: boolean }) => {
@@ -480,18 +393,18 @@ const App: React.FC = () => {
     );
   };
 
-  const SummaryCard = ({ title, value, icon: Icon, colorClass, action }: any) => (
+  const SummaryCard = ({ title, value, icon: Icon, colorClass, action, isUrgent }: any) => (
     <div className="bg-white p-5 md:p-6 rounded-[32px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card group h-full flex flex-col justify-between">
       <div className="absolute top-0 right-0 p-1 opacity-5 xhosa-pattern-sm" />
       <div className="flex items-start justify-between relative z-10">
         <div className="flex flex-col">
-          <p className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{title}</p>
+          <p className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1 ${isUrgent ? 'text-rose-600' : 'text-gray-400'}`}>{title}</p>
           <p className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">{value}</p>
         </div>
         <div className={`p-2.5 rounded-xl ${colorClass} shrink-0`}><Icon size={18} /></div>
       </div>
       {action && (
-        <button onClick={action} className="mt-4 w-full py-2.5 bg-gray-50 text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-gray-100 transition-all border border-gray-100 flex items-center justify-center gap-2 group-hover:border-indigo-200 group-hover:text-indigo-600">
+        <button onClick={action} className="mt-4 w-full py-2.5 bg-gray-50 text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-gray-100 transition-all border border-gray-100 flex items-center justify-center gap-2 group-hover:border-indigo-200 group-hover:text-indigo-600 text-gray-700">
           {isSendingNotifications ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />}
           {isSendingNotifications ? t.sendingNotifs : t.sendNotifications}
         </button>
@@ -512,9 +425,15 @@ const App: React.FC = () => {
         userName={currentBorrowerAccount?.name}
         overdueCount={stats.overdueCount}
       >
-        {showToast && (<div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] bg-gray-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 border border-white/10 relative overflow-hidden"><div className="absolute inset-0 xhosa-pattern-sm opacity-[0.05]" /><CheckCircle2 size={18} className="text-emerald-400 relative z-10" /><span className="text-sm font-bold relative z-10">{showToast}</span></div>)}
+        {showToast && (
+          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] bg-gray-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 border border-white/10 relative overflow-hidden">
+            <div className="absolute inset-0 xhosa-pattern-sm opacity-[0.05]" />
+            <CheckCircle2 size={18} className="text-emerald-400 relative z-10" />
+            <span className="text-sm font-bold relative z-10">{showToast}</span>
+          </div>
+        )}
+        
         <div className="space-y-6 md:space-y-8 pb-32 animate-in fade-in duration-500">
-          
           {activeTab === 'dashboard' && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
@@ -525,9 +444,10 @@ const App: React.FC = () => {
                   value={stats.overdueCount} 
                   icon={AlertCircle} 
                   colorClass="bg-rose-50 text-rose-600"
+                  isUrgent={stats.overdueCount > 0}
                   action={userRole === UserRole.LENDER && stats.overdueCount > 0 ? () => handleSendNotifications() : null}
                 />
-                <SummaryCard title={userRole === UserRole.LENDER ? t.borrowers : "My Trust Score"} value={userRole === UserRole.LENDER ? stats.score : stats.score} icon={userRole === UserRole.LENDER ? Users : Zap} colorClass="bg-indigo-50 text-indigo-600" />
+                <SummaryCard title={userRole === UserRole.LENDER ? t.borrowers : "My Trust Score"} value={stats.score} icon={userRole === UserRole.LENDER ? Users : Zap} colorClass="bg-indigo-50 text-indigo-600" />
               </div>
 
               {userRole === UserRole.BORROWER && (
@@ -537,15 +457,12 @@ const App: React.FC = () => {
                     style={{ backgroundImage: `url('${theme.bg}')` }}
                   >
                     <div className={`absolute inset-0 ${theme.overlay} transition-colors duration-700`} />
-                    <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-emerald-950 to-transparent opacity-80" />
-                    
                     <div className="relative z-10 flex flex-col justify-between h-full gap-4 md:gap-6">
                       <div className="flex flex-col gap-6">
                         <div className="flex items-center justify-between">
                           <div className="px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] border border-white/20 shadow-lg flex items-center gap-2">
                             <MapPin size={10} className="text-emerald-400" /> {currentBorrowerCity}
                           </div>
-                          
                           <button 
                             onClick={() => {
                               const states: (keyof typeof WEATHER_THEMES)[] = ['sunny', 'cloudy', 'rainy'];
@@ -557,68 +474,44 @@ const App: React.FC = () => {
                             <theme.icon size={14} className={theme.accent} /> {theme.condition} • {theme.temp}
                           </button>
                         </div>
-
-                        <div className="bg-emerald-900/20 backdrop-blur-2xl border border-white/10 rounded-[32px] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.3)] mt-2 group/widget hover:bg-emerald-800/30 transition-all duration-500">
+                        <div className="bg-emerald-900/20 backdrop-blur-2xl border border-white/10 rounded-[32px] p-6 shadow-xl mt-2 group/widget hover:bg-emerald-800/30 transition-all duration-500">
                            <div className="flex items-end justify-between mb-6">
                               <div className="flex items-center gap-4">
-                                 <theme.icon size={48} className={`${theme.accent} drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] animate-pulse`} />
+                                 <theme.icon size={48} className={`${theme.accent} drop-shadow-lg animate-pulse`} />
                                  <div>
                                     <p className="text-5xl font-black leading-none tracking-tighter">{theme.temp}</p>
                                     <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60 mt-1">High: 27° Low: 16°</p>
                                  </div>
                               </div>
-                              <div className="text-right">
-                                 <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-70 mb-1">Local Conditions</p>
-                                 <p className="text-lg font-black uppercase tracking-tight">{theme.condition}</p>
-                              </div>
-                           </div>
-                           
-                           <div className="grid grid-cols-5 gap-4 pt-6 border-t border-white/5">
-                              {[
-                                { hour: '12PM', temp: '24°', icon: Sun, active: currentWeather === 'sunny' },
-                                { hour: '1PM', temp: '26°', icon: Sun, active: false },
-                                { hour: '2PM', temp: '27°', icon: Cloud, active: currentWeather === 'cloudy' },
-                                { hour: '3PM', temp: '25°', icon: Cloud, active: false },
-                                { hour: '4PM', temp: '23°', icon: CloudRain, active: currentWeather === 'rainy' }
-                              ].map((f, i) => (
-                                <div key={i} className={`flex flex-col items-center gap-2 transition-all duration-500 ${f.active ? 'scale-110 opacity-100' : 'opacity-40 hover:opacity-100'}`}>
-                                   <p className="text-[8px] font-black uppercase tracking-widest">{f.hour}</p>
-                                   <f.icon size={18} className={f.hour === '4PM' ? 'text-blue-300' : 'text-yellow-400'} />
-                                   <p className="text-sm font-black">{f.temp}</p>
-                                </div>
-                              ))}
-                           </div>
-                           
-                           <div className="flex justify-between mt-6 pt-4 border-t border-white/5 opacity-40">
-                              <div className="flex items-center gap-2"><Wind size={10} /><span className="text-[8px] font-black uppercase tracking-widest">12 km/h</span></div>
-                              <div className="flex items-center gap-2"><Droplets size={10} /><span className="text-[8px] font-black uppercase tracking-widest">44% Humid</span></div>
-                              <div className="flex items-center gap-2"><Thermometer size={10} /><span className="text-[8px] font-black uppercase tracking-widest">Feels 26°</span></div>
                            </div>
                         </div>
-
                         <div className="mt-2 space-y-1">
-                          <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tight leading-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">New Loan Request</h3>
-                          <div className="flex items-center gap-2">
-                             <div className={`w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping`} />
-                             <p className="text-emerald-50 text-[10px] md:text-xs font-black uppercase tracking-widest drop-shadow-sm">{theme.tag}</p>
-                          </div>
+                          <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tight leading-none drop-shadow-md">New Loan Request</h3>
+                          <p className="text-emerald-50 text-[10px] md:text-xs font-black uppercase tracking-widest">{theme.tag}</p>
                         </div>
                       </div>
-                      <button onClick={() => setIsAddModalOpen(true)} className="bg-white text-emerald-950 w-full py-5 rounded-[24px] font-black text-xs md:text-sm uppercase tracking-widest shadow-[0_20px_40px_rgba(0,0,0,0.3)] hover:bg-emerald-50 active:scale-[0.98] transition-all flex items-center justify-center gap-3 relative overflow-hidden group/btn">
-                         <div className="absolute inset-0 bg-emerald-600/10 scale-x-0 group-hover/btn:scale-x-100 transition-transform origin-left duration-500" />
-                         <span className="relative z-10">Start Fast Application</span>
-                         <ArrowRight size={18} className="relative z-10 group-hover/btn:translate-x-2 transition-transform" />
+                      <button onClick={() => setIsAddModalOpen(true)} className="bg-white text-emerald-950 w-full py-5 rounded-[24px] font-black text-xs md:text-sm uppercase tracking-widest shadow-2xl hover:bg-emerald-50 active:scale-[0.98] transition-all flex items-center justify-center gap-3 group/btn">
+                         <span>Start Fast Application</span>
+                         <ArrowRight size={18} className="group-hover/btn:translate-x-2 transition-transform" />
                       </button>
                     </div>
                   </div>
                   <div className="bg-white p-6 md:p-8 rounded-[2.5rem] md:rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card">
-                    <div className="absolute top-0 right-0 p-4 opacity-5 xhosa-accent-pattern scale-150" />
                     <div className="relative z-10 flex flex-col justify-between h-full">
-                       <div className="flex items-center gap-4 mb-4"><div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-[#1a1a1a] flex items-center justify-center text-white shadow-lg"><UserCircle size={24} className="md:w-8 md:h-8" /></div><div><h3 className="text-lg md:text-xl font-black text-gray-900 uppercase tracking-tight">Verified Member</h3><p className="text-[8px] md:text-[10px] text-gray-400 font-black uppercase tracking-widest">Digital Vault Secure</p></div></div>
+                       <div className="flex items-center gap-4 mb-4">
+                         <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-[#1a1a1a] flex items-center justify-center text-white shadow-lg">
+                           <UserCircle size={24} className="md:w-8 md:h-8" />
+                         </div>
+                         <div>
+                           <h3 className="text-lg md:text-xl font-black text-gray-900 uppercase tracking-tight">Verified Member</h3>
+                           <p className="text-[8px] md:text-[10px] text-gray-400 font-black uppercase tracking-widest">Digital Vault Secure</p>
+                         </div>
+                       </div>
                        <p className="text-xs md:text-sm text-gray-500 font-medium mb-6 leading-relaxed">Access your secure profile, update contact information, and track your credit motif.</p>
                        <div className="flex gap-3">
-                         <button onClick={() => setSelectedBorrowerId(loggedInBorrowerId)} className="flex-1 bg-[#1a1a1a] text-white py-3.5 md:py-4 rounded-xl md:rounded-2xl font-black text-[10px] md:text-sm uppercase tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2"><Eye size={16} /> Profile</button>
-                         <button onClick={() => handleEditBorrower(currentBorrowerAccount)} className="px-4 bg-gray-50 text-gray-400 border border-gray-100 rounded-xl md:rounded-2xl hover:text-indigo-600 transition-all"><Edit2 size={18} /></button>
+                         <button onClick={() => setSelectedBorrowerId(loggedInBorrowerId)} className="flex-1 bg-[#1a1a1a] text-white py-3.5 md:py-4 rounded-xl md:rounded-2xl font-black text-[10px] md:text-sm uppercase tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2">
+                           <Eye size={16} /> Profile
+                         </button>
                        </div>
                     </div>
                   </div>
@@ -627,8 +520,10 @@ const App: React.FC = () => {
 
               <div className="mt-6 md:mt-8">
                 <div className="bg-white p-6 md:p-8 rounded-[2.5rem] md:rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card min-h-[350px] md:min-h-[400px]">
-                  <div className="absolute top-0 right-0 p-4 opacity-5 xhosa-accent-pattern scale-150" />
-                  <div className="flex items-center gap-3 mb-6 md:mb-8"><div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><BarChart3 size={20} className="md:w-6 md:h-6" /></div><h3 className="text-lg md:text-xl font-black text-gray-900 uppercase tracking-tight">{userRole === UserRole.LENDER ? 'Portfolio Activity' : 'Disbursement History'}</h3></div>
+                  <div className="flex items-center gap-3 mb-6 md:mb-8">
+                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><BarChart3 size={20} /></div>
+                    <h3 className="text-lg md:text-xl font-black text-gray-900 uppercase tracking-tight">{userRole === UserRole.LENDER ? 'Portfolio Activity' : 'Disbursement History'}</h3>
+                  </div>
                   <div className="h-[250px] md:h-[300px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData.monthlyData}>
@@ -642,34 +537,21 @@ const App: React.FC = () => {
                   </div>
                 </div>
               </div>
-
-              <div className="mt-6 md:mt-8 space-y-4 md:space-y-6">
-                <div className="flex items-center gap-3"><div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><ReceiptText size={20} className="md:w-6 md:h-6" /></div><h3 className="text-lg md:text-xl font-black text-gray-900 uppercase tracking-tight">{userRole === UserRole.LENDER ? 'Active Commitments' : 'Active Ledger'}</h3></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
-                  {activeLoansForDashboard.map(loan => {
-                    const remaining = calculateRemainingBalance(loan);
-                    return (
-                      <div key={loan.id} className="bg-white p-5 md:p-6 rounded-[2rem] md:rounded-[32px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card group hover:shadow-md transition-all">
-                        <div className="flex justify-between items-start mb-4"><div className="text-[9px] md:text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg uppercase tracking-widest">{loan.id}</div><StatusDot status={loan.status} /></div>
-                        <p className="font-black text-gray-900 text-sm mb-4">{userRole === UserRole.LENDER ? loan.borrowerName : "My Active Account"}</p>
-                        <div className="space-y-3 md:space-y-4">
-                          <div><p className="text-[8px] md:text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Due to Repay</p><p className={`text-xl md:text-2xl font-black font-mono tracking-tight ${loan.status === RepaymentStatus.OVERDUE ? 'text-rose-600' : 'text-indigo-600'}`}>R {remaining.toLocaleString()}</p></div>
-                          <div className="flex justify-between items-end pt-3 md:pt-4 border-t border-gray-50"><div><p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Due Date</p><p className="text-[10px] md:text-xs font-bold text-gray-600">{loan.dueDate}</p></div><button onClick={() => setSelectedLoan(loan)} className="p-2 bg-gray-50 rounded-xl text-gray-400 hover:text-indigo-600 transition-colors"><ArrowRight size={14} /></button></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {activeLoansForDashboard.length === 0 && <div className="col-span-full py-12 bg-gray-50 rounded-[2.5rem] border border-dashed border-gray-200 flex flex-col items-center justify-center opacity-40"><ReceiptText size={40} className="mb-2 text-gray-400" /><p className="font-black text-[10px] uppercase tracking-widest">No active commitments found</p></div>}
-                </div>
-              </div>
             </>
           )}
 
           {activeTab === 'loans' && (
             <div className="bg-white rounded-[2rem] md:rounded-[40px] border border-gray-100 shadow-sm overflow-hidden relative">
               <div className="p-6 md:p-8 border-b border-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 relative z-10 bg-gray-50/20">
-                 <div className="relative w-full md:w-80 group"><Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" /><input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder={t.search} className="w-full pl-12 pr-6 py-3 bg-white border-none rounded-xl md:rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all text-sm font-medium shadow-sm" /></div>
-                 <div className="flex flex-wrap gap-2"><button onClick={() => setIsAddModalOpen(true)} className="flex-1 md:flex-none bg-[#1a1a1a] text-white px-6 md:px-8 py-3 rounded-xl md:rounded-2xl font-black text-xs md:text-sm uppercase tracking-widest shadow-xl hover:bg-black active:scale-95 transition-all flex items-center justify-center gap-2"><Plus size={18} /> {userRole === UserRole.LENDER ? 'New Account' : 'Request Loan'}</button></div>
+                 <div className="relative w-full md:w-80 group">
+                   <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" />
+                   <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder={t.search} className="w-full pl-12 pr-6 py-3 bg-white border-none rounded-xl md:rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all text-sm font-medium shadow-sm" />
+                 </div>
+                 <div className="flex flex-wrap gap-2">
+                   <button onClick={() => setIsAddModalOpen(true)} className="flex-1 md:flex-none bg-[#1a1a1a] text-white px-6 md:px-8 py-3 rounded-xl md:rounded-2xl font-black text-xs md:text-sm uppercase tracking-widest shadow-xl hover:bg-black active:scale-95 transition-all flex items-center justify-center gap-2">
+                     <Plus size={18} /> {userRole === UserRole.LENDER ? 'New Account' : 'Request Loan'}
+                   </button>
+                 </div>
               </div>
               
               <div className="md:hidden divide-y divide-gray-50">
@@ -685,7 +567,6 @@ const App: React.FC = () => {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-black text-gray-900">R {loan.amountLoaned.toLocaleString()}</p>
-                      <p className="text-[10px] font-black text-indigo-600 font-mono mt-1">R {(loan.totalRepayment + calculatePenaltyDetails(loan).penalty).toLocaleString()}</p>
                       <ChevronRight size={16} className="ml-auto mt-2 text-gray-300 group-active:text-indigo-600" />
                     </div>
                   </div>
@@ -695,24 +576,243 @@ const App: React.FC = () => {
               <div className="hidden md:block overflow-x-auto relative z-10 custom-scrollbar">
                 <table className="w-full text-left">
                   <thead className="bg-gray-50/50 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">
-                    <tr><th className="px-8 py-5">Transaction ID</th><th className="px-8 py-5">Borrower Name</th><th className="px-8 py-5">Borrower Number</th><th className="px-8 py-5">Amount Loaned</th><th className="px-8 py-5">Due Date</th><th className="px-8 py-5">Total Amount Due</th><th className="px-8 py-5">Total Amount Paid</th><th className="px-8 py-5">Status</th><th className="px-8 py-5 text-center">Action</th></tr>
+                    <tr>
+                      <th className="px-8 py-5">Transaction ID</th>
+                      <th className="px-8 py-5">Borrower Name</th>
+                      <th className="px-8 py-5">Amount Loaned</th>
+                      <th className="px-8 py-5">Due Date</th>
+                      <th className="px-8 py-5">Total Amount Due</th>
+                      <th className="px-8 py-5">Status</th>
+                      <th className="px-8 py-5 text-center">Action</th>
+                    </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {filteredAndSortedLoans.map((loan) => (
                       <tr key={loan.id} className="hover:bg-gray-50/80 transition-all">
-                        <td className="px-8 py-6"><div className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-lg rotate-1 inline-block uppercase tracking-tighter border border-white/20">{loan.id}</div></td>
-                        <td className="px-8 py-6"><p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p></td>
-                        <td className="px-8 py-6"><p className="text-sm font-bold text-gray-600 font-mono">{loan.borrowerNumber}</p></td>
-                        <td className="px-8 py-6"><p className="font-black text-gray-900 text-sm">R {loan.amountLoaned.toLocaleString()}</p></td>
+                        <td className="px-8 py-6">
+                          <div className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-lg rotate-1 inline-block uppercase tracking-tighter border border-white/20">
+                            {loan.id}
+                          </div>
+                        </td>
+                        <td className="px-8 py-6">
+                          <p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p>
+                        </td>
+                        <td className="px-8 py-6">
+                          <p className="font-black text-gray-900 text-sm">R {loan.amountLoaned.toLocaleString()}</p>
+                        </td>
                         <td className="px-8 py-6 text-xs font-bold text-gray-600">{loan.dueDate}</td>
-                        <td className="px-8 py-6"><p className="font-black text-indigo-600 font-mono text-sm">R {(loan.totalRepayment + calculatePenaltyDetails(loan).penalty).toLocaleString()}</p></td>
-                        <td className="px-8 py-6"><p className="font-black text-emerald-600 font-mono text-sm">R {calculateTotalPaid(loan).toLocaleString()}</p></td>
+                        <td className="px-8 py-6">
+                          <p className="font-black text-indigo-600 font-mono text-sm">R {(loan.totalRepayment + calculatePenaltyDetails(loan).penalty).toLocaleString()}</p>
+                        </td>
                         <td className="px-8 py-6"><StatusDot status={loan.status} showLabel /></td>
-                        <td className="px-8 py-6 flex justify-center gap-2"><button onClick={() => setSelectedLoan(loan)} className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm"><Eye size={18} /></button></td>
+                        <td className="px-8 py-6 flex justify-center gap-2">
+                          <button onClick={() => setSelectedLoan(loan)} className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm">
+                            <Eye size={18} />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'calculator' && (
+            <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8 duration-700">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg">
+                  {/* Fix: Added missing Calculator icon import */}
+                  <Calculator size={32} />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">Advanced Loan Planner</h2>
+                  <p className="text-gray-500 font-medium">Professional micro-lending projection & schedule tool.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Configuration Panel */}
+                <div className="lg:col-span-5 space-y-6">
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 relative overflow-hidden h-full">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 xhosa-pattern-sm" />
+                    <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-8 flex items-center gap-2">
+                      {/* Fix: Added missing Settings icon import */}
+                      <Settings size={20} className="text-indigo-600" /> 
+                      {language === Language.EN ? 'Configure Motif' : 'Seta iinkcukacha'}
+                    </h3>
+
+                    <div className="space-y-10">
+                      {/* Principal Slider */}
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-end">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t.principal}</label>
+                          <span className="font-black text-2xl text-gray-900 font-mono">R {calcAmount.toLocaleString()}</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="200" 
+                          max="25000" 
+                          step="100" 
+                          value={calcAmount} 
+                          onChange={e => setCalcAmount(Number(e.target.value))} 
+                          className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" 
+                        />
+                      </div>
+
+                      {/* Interest Rate Slider */}
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-end">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{language === Language.EN ? 'Interest Rate' : 'Inzala'}</label>
+                          <span className="font-black text-2xl text-indigo-600 font-mono">{calcInterest}%</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="0" 
+                          max="100" 
+                          step="5" 
+                          value={calcInterest} 
+                          onChange={e => setCalcInterest(Number(e.target.value))} 
+                          className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" 
+                        />
+                      </div>
+
+                      {/* Duration & Frequency Split */}
+                      <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                            <Calendar size={14} /> {language === Language.EN ? 'Duration' : 'Ixesha'}
+                          </label>
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="number" 
+                              value={calcWeeks} 
+                              onChange={e => setCalcWeeks(Math.max(1, Number(e.target.value)))}
+                              className="w-full bg-gray-50 border-none rounded-2xl px-4 py-3 font-black text-lg focus:ring-2 focus:ring-indigo-600"
+                            />
+                            <span className="text-xs font-black uppercase text-gray-400">{language === Language.EN ? 'Wks' : 'Iiv'}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-4">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                            {/* Fix: Added missing RefreshCw icon import */}
+                            <RefreshCw size={14} /> {language === Language.EN ? 'Frequency' : 'Amaxesha'}
+                          </label>
+                          <select 
+                            value={calcFrequency}
+                            onChange={e => setCalcFrequency(e.target.value as any)}
+                            className="w-full bg-gray-50 border-none rounded-2xl px-4 py-3 font-black text-sm uppercase tracking-widest focus:ring-2 focus:ring-indigo-600 appearance-none"
+                          >
+                            <option value="weekly">{language === Language.EN ? 'Weekly' : 'Ngeveki'}</option>
+                            <option value="fortnightly">{language === Language.EN ? 'Bi-Weekly' : 'Ngeeviki ezi-2'}</option>
+                            <option value="monthly">{language === Language.EN ? 'Monthly' : 'Ngenyanga'}</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Analysis & Schedule Panel */}
+                <div className="lg:col-span-7 space-y-8">
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-[#1a1a1a] p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
+                      <div className="absolute inset-0 xhosa-pattern-sm opacity-5 pointer-events-none" />
+                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-2">{language === Language.EN ? 'Total Repayment' : 'Iyonke emayihlawulwe'}</p>
+                      <p className="text-4xl font-black tracking-tighter leading-none mb-6">R {calcResults.total.toLocaleString()}</p>
+                      <div className="flex justify-between items-center pt-6 border-t border-white/10">
+                        <div>
+                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">{language === Language.EN ? 'Installment' : 'Isavenge'}</p>
+                          <p className="text-xl font-black text-indigo-400">R {calcResults.perInstallment.toLocaleString()}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">{language === Language.EN ? 'Count' : 'Inani'}</p>
+                          <p className="text-xl font-black text-white">{calcResults.numInstallments}x</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-xl flex items-center justify-between">
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Interest Contribution</p>
+                          <p className="text-2xl font-black text-indigo-600 font-mono">+ R {calcResults.interest.toLocaleString()}</p>
+                        </div>
+                        <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden flex">
+                          <div className="bg-[#1a1a1a] h-full transition-all duration-500" style={{ width: `${(calcAmount / calcResults.total) * 100}%` }} />
+                          <div className="bg-indigo-600 h-full transition-all duration-500" style={{ width: `${(calcResults.interest / calcResults.total) * 100}%` }} />
+                        </div>
+                      </div>
+                      <div className="w-24 h-24 shrink-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={calcResults.pieData}
+                              innerRadius={25}
+                              outerRadius={40}
+                              paddingAngle={5}
+                              dataKey="value"
+                            >
+                              {calcResults.pieData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Schedule Table */}
+                  <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden">
+                    <div className="p-6 border-b border-gray-50 flex items-center justify-between bg-gray-50/30">
+                      <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                        <History size={16} className="text-indigo-600" />
+                        {language === Language.EN ? 'Repayment Schedule' : 'Uluhlu lweentlawulo'}
+                      </h4>
+                      <div className="px-3 py-1 bg-white border border-gray-200 rounded-full text-[10px] font-black text-gray-500 uppercase">
+                        {calcResults.numInstallments} {language === Language.EN ? 'Payments' : 'Iintlawulo'}
+                      </div>
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                      <table className="w-full text-left">
+                        <thead className="sticky top-0 bg-white border-b border-gray-50 z-10">
+                          <tr>
+                            <th className="px-8 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">#</th>
+                            <th className="px-8 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Date / Umhla</th>
+                            <th className="px-8 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-right">Amount / Isixa</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {calcResults.schedule.map((item) => (
+                            <tr key={item.installment} className="hover:bg-indigo-50/30 transition-colors group">
+                              <td className="px-8 py-4">
+                                <span className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-[10px] font-black text-gray-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                  {item.installment}
+                                </span>
+                              </td>
+                              <td className="px-8 py-4 font-bold text-gray-600 text-sm font-mono">{item.date}</td>
+                              <td className="px-8 py-4 text-right">
+                                <span className="font-black text-gray-900 text-sm">R {item.amount.toLocaleString()}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-indigo-50/50 rounded-3xl border border-indigo-100 flex items-start gap-4">
+                    <InfoIcon size={20} className="text-indigo-600 shrink-0 mt-1" />
+                    <p className="text-xs text-indigo-900/70 font-medium leading-relaxed">
+                      {language === Language.EN 
+                        ? 'Repayment dates are projections based on the today. Adjusting the frequency recalculated installments automatically. Penalty rates are applied manually during the active loan phase if repayments are missed.'
+                        : 'Imihla yeentlawulo luqikelelo olusekwe namhlanje. Ukutshintsha i-frequency kuhlaziya isixa semali ngokuzenzekelayo. Iziporo (Penalties) zongezwa ngesandla xa intlawulo ithe yaphoswa.'}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -767,17 +867,6 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'calculator' && (
-            <div className="max-w-4xl mx-auto animate-in slide-in-from-bottom-8 duration-700">
-               <div className="bg-white rounded-[2rem] md:rounded-[40px] shadow-2xl border border-gray-100 overflow-hidden cultural-card p-6 md:p-12">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-16">
-                     <div className="space-y-8 md:space-y-12"><h3 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tighter uppercase">Calculator</h3><div className="space-y-6 md:space-y-8"><div className="space-y-4"><div className="flex justify-between items-end px-2"><label className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest">Principal</label><span className="font-black text-xl md:text-2xl text-gray-900 font-mono">R {calcAmount.toLocaleString()}</span></div><input type="range" min="200" max="10000" step="100" value={calcAmount} onChange={e => setCalcAmount(Number(e.target.value))} className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" /></div><div className="space-y-4"><div className="flex justify-between items-end px-2"><label className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase tracking-widest">Duration (Weeks)</label><span className="font-black text-xl md:text-2xl text-gray-900 font-mono">{calcWeeks}</span></div><input type="range" min="1" max="52" step="1" value={calcWeeks} onChange={e => setCalcWeeks(Number(e.target.value))} className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" /></div></div></div>
-                     <div className="bg-[#1a1a1a] p-8 md:p-12 rounded-[2rem] md:rounded-[3rem] text-white flex flex-col justify-center items-center text-center space-y-4 md:space-y-6 shadow-2xl relative group"><p className="text-[9px] md:text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em]">Estimated Total</p><p className="text-4xl md:text-6xl font-black tracking-tighter leading-none">R {calcResults.total.toLocaleString()}</p><div className="w-16 md:w-24 h-1 bg-indigo-600/30 rounded-full" /><div className="flex justify-between w-full px-4 md:px-8"><span className="text-[9px] font-black uppercase text-gray-500 tracking-widest">Interest</span><span className="font-black text-indigo-400 text-base md:text-lg">R {calcResults.interest.toLocaleString()}</span></div></div>
-                  </div>
-               </div>
-            </div>
-          )}
-
           {activeTab === 'settings' && userRole === UserRole.LENDER && (
             <div className="max-w-2xl mx-auto">
                <div className="bg-white p-6 md:p-10 rounded-[2.5rem] md:rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden">
@@ -801,10 +890,6 @@ const App: React.FC = () => {
           )}
         </div>
       </Layout>
-
-      {/* Register Borrower Overlay Logic - No change requested here */}
-      {/* Edit Borrower Modal - No change requested here */}
-      {/* Borrower/Loan detail Modals - No change requested here */}
     </div>
   );
 };

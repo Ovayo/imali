@@ -30,13 +30,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (language === Language.XH) {
-      if (hour >= 5 && hour < 12) return 'Molo kusasa';
-      if (hour >= 12 && hour < 18) return 'Molo emva kwemini';
-      return 'Molo ngokuhlwa';
+      if (hour >= 5 && hour < 12) return 'Molo kusasa'; // Good morning
+      if (hour >= 12 && hour < 17) return 'Molo emva kwemini'; // Good afternoon
+      return 'Molo ngokuhlwa'; // Good evening
     }
     
     if (hour >= 5 && hour < 12) return 'Good Morning';
-    if (hour >= 12 && hour < 18) return 'Good Afternoon';
+    if (hour >= 12 && hour < 17) return 'Good Afternoon';
     return 'Good Evening';
   };
 
@@ -90,7 +90,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
   const displayUserName = userName || (userRole === UserRole.LENDER ? 'Ovayo M.' : 'Borrower');
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[#fdfcfb] xhosa-pattern overflow-x-hidden">
+    <div className="h-screen flex flex-col md:flex-row bg-[#fdfcfb] xhosa-pattern overflow-hidden">
+      {/* Mobile Header */}
       <header className="md:hidden bg-[#1a1a1a] text-white p-4 flex justify-between items-center fixed top-0 left-0 right-0 z-[60] shadow-lg">
         <div className="flex items-center gap-3">
           <button 
@@ -128,60 +129,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
         </div>
       </header>
 
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-[100] md:hidden">
-          <div className="absolute inset-0 bg-[#1a1a1a]/80 backdrop-blur-sm transition-opacity" onClick={() => setIsMobileMenuOpen(false)} />
-          <nav className="absolute left-0 top-0 bottom-0 w-4/5 max-sm bg-[#1a1a1a] text-white shadow-2xl flex flex-col animate-in slide-in-from-left duration-300 relative overflow-hidden">
-            <div className="absolute inset-0 opacity-[0.05] pointer-events-none xhosa-pattern rotate-12 scale-150" />
-            <div className="bead-accent absolute top-0 left-0 w-full opacity-50" />
-            <div className="p-8 flex justify-between items-center relative z-10 border-b border-white/5">
-              <div className="flex items-center gap-3">
-                <div className="bg-indigo-600 p-2 rounded-xl shadow-lg">
-                   <Wallet size={24} />
-                </div>
-                <h1 className="text-2xl font-black tracking-tighter uppercase">imali</h1>
-              </div>
-              <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors border border-white/10"><X size={24} /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-2 relative z-10">
-              {menuItems.map((item) => (
-                <button key={item.id} onClick={() => handleMobileNav(item.id)} className={`w-full flex items-center gap-4 px-6 py-5 rounded-2xl transition-all duration-300 relative overflow-hidden group ${activeTab === item.id ? 'bg-indigo-600/20 text-white shadow-xl border border-indigo-600/30' : 'text-gray-300 hover:text-white'}`}>
-                  <item.icon size={24} className={activeTab === item.id ? 'text-indigo-400' : 'text-gray-400'} />
-                  <span className="font-black text-base uppercase tracking-widest">{item.label}</span>
-                  {activeTab === item.id && <div className="absolute right-0 top-0 h-full w-1.5 bg-indigo-600" />}
-                </button>
-              ))}
-              
-              {userRole === UserRole.BORROWER && (
-                <button 
-                  onClick={() => { toggleRole(); setIsMobileMenuOpen(false); }}
-                  className="w-full flex items-center gap-4 px-6 py-5 rounded-2xl transition-all duration-300 relative overflow-hidden text-rose-400 hover:bg-rose-500/10 mt-10 border border-rose-500/20"
-                >
-                  <LogOut size={24} />
-                  <span className="font-black text-base uppercase tracking-widest">Log Out</span>
-                </button>
-              )}
-            </div>
-            <div className="p-8 space-y-4 border-t border-white/5 bg-black/20 relative z-10">
-              <button onClick={() => { setLanguage(language === Language.EN ? Language.XH : Language.EN); setIsMobileMenuOpen(false); }} className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 text-sm font-bold text-white">
-                <div className="flex items-center gap-3 text-indigo-400"><Languages size={18} /><span>Language / Ulwimi</span></div>
-                <span className="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] uppercase font-black">{language === Language.EN ? 'isiXhosa' : 'English'}</span>
-              </button>
-              <div className="flex items-center gap-4 p-2">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-white shadow-lg border border-white/10 overflow-hidden relative ${userRole === UserRole.LENDER ? 'bg-indigo-600' : 'bg-emerald-600'}`}>
-                  {displayUserName[0]}
-                </div>
-                <div>
-                  <p className="font-black text-sm uppercase tracking-tight text-white">{displayUserName}</p>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{userRole === UserRole.LENDER ? 'Village Lender' : 'Verified Borrower'}</p>
-                </div>
-              </div>
-            </div>
-          </nav>
-        </div>
-      )}
-
-      <aside className="hidden md:flex flex-col w-72 bg-[#1a1a1a] text-white h-screen sticky top-0 shadow-2xl relative overflow-hidden">
+      {/* Sidebar (Desktop) - Fixed height and static */}
+      <aside className="hidden md:flex flex-col w-72 bg-[#1a1a1a] text-white h-full sticky top-0 shadow-2xl relative overflow-hidden flex-shrink-0">
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none xhosa-pattern rotate-45 scale-150" />
         <div className="bead-accent absolute top-0 left-0 w-full opacity-50" />
         <div className="p-8 relative z-10 flex-1 flex flex-col">
@@ -256,9 +205,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
         </div>
       </aside>
 
+      {/* Main Content Area - Scrollable */}
       <main 
         ref={scrollContainerRef}
-        className="flex-1 flex flex-col min-h-screen overflow-y-auto overflow-x-hidden relative custom-scrollbar pt-[72px] md:pt-0 w-full"
+        className="flex-1 flex flex-col h-full overflow-y-auto relative custom-scrollbar pt-[72px] md:pt-0"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -286,14 +236,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
           </div>
         </div>
 
-        <div className="flex-1 p-4 md:p-10 relative overflow-x-hidden">
+        <div className="flex-1 p-4 md:p-10 relative">
           <div className="absolute top-0 right-0 w-96 h-96 opacity-[0.02] pointer-events-none xhosa-accent-pattern scale-150 rotate-12 -z-10" />
           
           <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
             <div>
               <h2 className="text-3xl font-black text-gray-900 tracking-tight uppercase">
                 {activeTab === 'dashboard' && (userRole === UserRole.LENDER 
-                  ? `${getGreeting()}! ${t.dashboard}` 
+                  ? `${getGreeting()}, ${t.dashboard}` 
                   : `${getGreeting()}, ${displayUserName.split(' ')[0]} 😊`)}
                 {activeTab === 'loans' && (userRole === UserRole.LENDER ? t.loans : 'My Active Loans')}
                 {activeTab === 'borrowers' && t.borrowers}
