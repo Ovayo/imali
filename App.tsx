@@ -1,4 +1,3 @@
-
 import * as React from 'react';
 import { useState, useMemo, useEffect } from 'react';
 import Layout from './components/Layout';
@@ -555,8 +554,8 @@ const App: React.FC = () => {
                      <div className="space-y-10">
                         <div className="space-y-6">
                            <div className="flex justify-between items-end px-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Loan Principal</label><span className="font-black text-3xl text-gray-900 font-mono tracking-tighter">R {calcAmount.toLocaleString()}</span></div>
-                           <input type="range" min="500" max="15000" step="100" value={calcAmount} onChange={e => setCalcAmount(Number(e.target.value))} className="w-full h-3 bg-gray-100 rounded-full appearance-none cursor-pointer accent-indigo-600" />
-                           <div className="flex flex-wrap gap-2 pt-2">{[500, 1000, 2500, 5000, 10000].map(amt => (<button key={amt} onClick={() => setCalcAmount(amt)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${calcAmount === amt ? 'bg-indigo-600 text-white shadow-lg' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 border border-gray-100'}`}>R {amt.toLocaleString()}</button>))}</div>
+                           <input type="range" min="200" max="15000" step="100" value={calcAmount} onChange={e => setCalcAmount(Number(e.target.value))} className="w-full h-3 bg-gray-100 rounded-full appearance-none cursor-pointer accent-indigo-600" />
+                           <div className="flex flex-wrap gap-2 pt-2">{[200, 1000, 2500, 5000, 10000].map(amt => (<button key={amt} onClick={() => setCalcAmount(amt)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${calcAmount === amt ? 'bg-indigo-600 text-white shadow-lg' : 'bg-gray-50 text-gray-400 hover:bg-gray-100 border border-gray-100'}`}>R {amt.toLocaleString()}</button>))}</div>
                         </div>
                         <div className="space-y-6">
                            <div className="flex justify-between items-end px-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-4">Duration (Weeks)</label><span className="font-black text-3xl text-gray-900 font-mono tracking-tighter">{calcWeeks} <span className="text-sm font-black uppercase text-gray-400">Wks</span></span></div>
