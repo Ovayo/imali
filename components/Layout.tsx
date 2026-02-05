@@ -14,9 +14,10 @@ interface LayoutProps {
   toggleRole: () => void;
   onRefresh?: () => Promise<void>;
   userName?: string;
+  overdueCount?: number;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, language, setLanguage, userRole, toggleRole, onRefresh, userName }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, language, setLanguage, userRole, toggleRole, onRefresh, userName, overdueCount }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -28,10 +29,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (language === Language.XH) return 'Molo';
+    if (language === Language.XH) {
+      if (hour >= 5 && hour < 12) return 'Molo kusasa';
+      if (hour >= 12 && hour < 18) return 'Molo emva kwemini';
+      return 'Molo ngokuhlwa';
+    }
     
     if (hour >= 5 && hour < 12) return 'Good Morning';
-    if (hour >= 12 && hour < 17) return 'Good Afternoon';
+    if (hour >= 12 && hour < 18) return 'Good Afternoon';
     return 'Good Evening';
   };
 
@@ -86,7 +91,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#fdfcfb] xhosa-pattern overflow-x-hidden">
-      {/* Mobile Header */}
       <header className="md:hidden bg-[#1a1a1a] text-white p-4 flex justify-between items-center fixed top-0 left-0 right-0 z-[60] shadow-lg">
         <div className="flex items-center gap-3">
           <button 
@@ -124,7 +128,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
         </div>
       </header>
 
-      {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-[100] md:hidden">
           <div className="absolute inset-0 bg-[#1a1a1a]/80 backdrop-blur-sm transition-opacity" onClick={() => setIsMobileMenuOpen(false)} />
@@ -148,18 +151,36 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
                   {activeTab === item.id && <div className="absolute right-0 top-0 h-full w-1.5 bg-indigo-600" />}
                 </button>
               ))}
+              
+              {userRole === UserRole.BORROWER && (
+                <button 
+                  onClick={() => { toggleRole(); setIsMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-4 px-6 py-5 rounded-2xl transition-all duration-300 relative overflow-hidden text-rose-400 hover:bg-rose-500/10 mt-10 border border-rose-500/20"
+                >
+                  <LogOut size={24} />
+                  <span className="font-black text-base uppercase tracking-widest">Log Out</span>
+                </button>
+              )}
             </div>
             <div className="p-8 space-y-4 border-t border-white/5 bg-black/20 relative z-10">
               <button onClick={() => { setLanguage(language === Language.EN ? Language.XH : Language.EN); setIsMobileMenuOpen(false); }} className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 text-sm font-bold text-white">
                 <div className="flex items-center gap-3 text-indigo-400"><Languages size={18} /><span>Language / Ulwimi</span></div>
                 <span className="bg-indigo-600 text-white px-2 py-0.5 rounded text-[10px] uppercase font-black">{language === Language.EN ? 'isiXhosa' : 'English'}</span>
               </button>
+              <div className="flex items-center gap-4 p-2">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-white shadow-lg border border-white/10 overflow-hidden relative ${userRole === UserRole.LENDER ? 'bg-indigo-600' : 'bg-emerald-600'}`}>
+                  {displayUserName[0]}
+                </div>
+                <div>
+                  <p className="font-black text-sm uppercase tracking-tight text-white">{displayUserName}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{userRole === UserRole.LENDER ? 'Village Lender' : 'Verified Borrower'}</p>
+                </div>
+              </div>
             </div>
           </nav>
         </div>
       )}
 
-      {/* Sidebar (Desktop) */}
       <aside className="hidden md:flex flex-col w-72 bg-[#1a1a1a] text-white h-screen sticky top-0 shadow-2xl relative overflow-hidden">
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none xhosa-pattern rotate-45 scale-150" />
         <div className="bead-accent absolute top-0 left-0 w-full opacity-50" />
@@ -182,7 +203,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
             ))}
           </nav>
           <div className="mt-auto space-y-4">
-             {userRole === UserRole.BORROWER ? (
+            {userRole === UserRole.BORROWER ? (
               <button onClick={toggleRole} className="w-full p-5 bg-rose-500/10 rounded-2xl border border-rose-500/20 hover:bg-rose-500/20 transition-all group relative overflow-hidden shadow-2xl">
                 <div className="absolute inset-0 opacity-5 xhosa-pattern-sm bg-rose-500" />
                 <div className="flex items-center justify-between mb-2">
@@ -235,7 +256,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
         </div>
       </aside>
 
-      {/* Main Content */}
       <main 
         ref={scrollContainerRef}
         className="flex-1 flex flex-col min-h-screen overflow-y-auto overflow-x-hidden relative custom-scrollbar pt-[72px] md:pt-0 w-full"
@@ -245,7 +265,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
       >
         <div className="bead-accent z-20 opacity-60 sticky top-0" />
         
-        {/* Pull to Refresh Indicator */}
         <div 
           className="absolute left-0 right-0 z-40 flex items-center justify-center pointer-events-none transition-all duration-200"
           style={{ 
