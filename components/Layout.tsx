@@ -132,7 +132,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
       {/* Sidebar (Desktop) */}
       <aside className="hidden md:flex flex-col w-72 bg-[#1a1a1a] text-white h-full sticky top-0 shadow-2xl relative overflow-hidden flex-shrink-0 min-w-0">
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none xhosa-pattern rotate-45 scale-150" />
-        <div className="bead-accent absolute top-0 left-0 w-full opacity-50" />
+        <div className="bead-accent absolute top-0 left-0 w-full" />
         <div className="p-8 relative z-10 flex-1 flex flex-col overflow-y-auto custom-scrollbar">
           <div className="flex justify-between items-start mb-10">
             <div className="flex items-center gap-3">
@@ -213,7 +213,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="bead-accent z-20 opacity-60 sticky top-0" />
+        <div className="bead-accent z-20 sticky top-0" />
         
         <div 
           className="absolute left-0 right-0 z-40 flex items-center justify-center pointer-events-none transition-all duration-200"

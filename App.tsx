@@ -472,7 +472,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[200] bg-[#1a1a1a] flex items-center justify-center p-6 overflow-hidden">
            <div className="absolute inset-0 opacity-[0.03] xhosa-pattern scale-150 rotate-12" />
            <div className="max-w-xl w-full bg-white rounded-[2.5rem] md:rounded-[40px] shadow-2xl relative animate-in fade-in zoom-in duration-500 overflow-hidden flex flex-col">
-              <div className="bead-accent absolute top-0 left-0 w-full opacity-20" />
+              <div className="bead-accent absolute top-0 left-0 w-full" />
               
               <div className="p-8 md:p-12">
                 <div className="flex flex-col items-center text-center mb-8">
@@ -502,7 +502,7 @@ const App: React.FC = () => {
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">{language === Language.XH ? 'Inombolo ye-ID' : 'ID Number'}</label>
                       <div className="relative group">
                         <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
-                        <input required value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="e.g. 9201010001081" className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-4 font-black text-sm tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner text-gray-900" />
+                        <input required value={loginId} onChange={setLoginId} placeholder="e.g. 9201010001081" className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-4 font-black text-sm tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner text-gray-900" />
                       </div>
                     </div>
                     <button type="submit" className="w-full py-5 bg-[#1a1a1a] text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-3"><span>Secure Access</span><ArrowRight size={18} /></button>
