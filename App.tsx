@@ -420,7 +420,7 @@ const App: React.FC = () => {
                     value={lenderPassInput}
                     onChange={e => setLenderPassInput(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-black text-center text-2xl tracking-[0.5em] focus:ring-4 focus:ring-gray-900/5 transition-all shadow-inner"
+                    className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-black text-center text-2xl tracking-[0.5em] focus:ring-4 focus:ring-gray-900/5 transition-all shadow-inner text-gray-900"
                   />
                 </div>
                 <button type="submit" className="w-full py-5 bg-gray-900 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.3em] shadow-xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-3">
@@ -492,7 +492,7 @@ const App: React.FC = () => {
                           value={loginId}
                           onChange={e => setLoginId(e.target.value)}
                           placeholder="e.g. 9201010001081"
-                          className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-4 font-black text-sm tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner"
+                          className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-4 font-black text-sm tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner text-gray-900"
                         />
                       </div>
                     </div>
@@ -506,20 +506,20 @@ const App: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Full Name</label>
-                        <input required value={regForm.name} onChange={e => setRegForm({...regForm, name: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600" />
+                        <input required value={regForm.name} onChange={e => setRegForm({...regForm, name: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" />
                       </div>
                       <div className="space-y-1">
                         <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">ID Number</label>
-                        <input required value={regForm.id} onChange={e => setRegForm({...regForm, id: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600" />
+                        <input required value={regForm.id} onChange={e => setRegForm({...regForm, id: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" />
                       </div>
                     </div>
                     <div className="space-y-1">
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Mobile Number</label>
-                      <input required value={regForm.phone} onChange={e => setRegForm({...regForm, phone: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600" />
+                      <input required value={regForm.phone} onChange={e => setRegForm({...regForm, phone: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Physical Address</label>
-                      <input required value={regForm.address} onChange={e => setRegForm({...regForm, address: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600" />
+                      <input required value={regForm.address} onChange={e => setRegForm({...regForm, address: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" />
                     </div>
                     <button type="submit" className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 mt-2">
                       <span>Create Profile</span>
@@ -675,7 +675,7 @@ const App: React.FC = () => {
                 <div className="p-6 md:p-8 border-b border-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 relative z-10 bg-gray-50/20">
                    <div className="relative w-full md:w-80 group">
                      <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" />
-                     <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder={t.search} className="w-full pl-12 pr-6 py-3 bg-white border-none rounded-xl md:rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all text-sm font-medium shadow-sm" />
+                     <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder={t.search} className="w-full pl-12 pr-6 py-3 bg-white border-none rounded-xl md:rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all text-sm font-medium shadow-sm text-gray-900" />
                    </div>
                    <div className="flex flex-wrap gap-2">
                      <button onClick={() => setIsAddModalOpen(true)} className="flex-1 md:flex-none bg-[#1a1a1a] text-white px-6 md:px-8 py-3 rounded-xl md:rounded-2xl font-black text-xs md:text-sm uppercase tracking-widest shadow-xl hover:bg-black active:scale-95 transition-all flex items-center justify-center gap-2">
