@@ -498,6 +498,8 @@ const App: React.FC = () => {
                     <Wallet size={32} className="relative z-10" />
                   </div>
                   <h1 className="text-5xl font-black text-indigo-600 tracking-tighter uppercase mb-1 drop-shadow-sm">imali</h1>
+                  <p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.2em] mb-6 drop-shadow-sm">Micro-Lending</p>
+                  
                   <h2 className="text-xl font-black text-gray-400 uppercase tracking-[0.2em] leading-none mb-4">
                     {language === Language.XH ? 'Uvimba Wababoleki' : 'Borrower Hub'}
                   </h2>
