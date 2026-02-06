@@ -1,3 +1,4 @@
+
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { Menu, Wallet, Users, LayoutDashboard, Settings, Bell, Languages, Calculator, ArrowLeftRight, UserCheck, ShieldCheck, X, RefreshCw, Loader2, LogOut } from 'lucide-react';
@@ -90,7 +91,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
   const displayUserName = userName || (userRole === UserRole.LENDER ? 'Ovayo M.' : 'Borrower');
 
   return (
-    <div className="h-screen flex flex-col md:flex-row bg-[#fdfcfb] xhosa-pattern overflow-hidden">
+    <div className="h-screen w-screen flex flex-col md:flex-row bg-[#fdfcfb] xhosa-pattern overflow-hidden">
       {/* Mobile Header */}
       <header className="md:hidden bg-[#1a1a1a] text-white p-4 flex justify-between items-center fixed top-0 left-0 right-0 z-[60] shadow-lg">
         <div className="flex items-center gap-3">
@@ -129,11 +130,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
         </div>
       </header>
 
-      {/* Sidebar (Desktop) - Fixed height and static */}
-      <aside className="hidden md:flex flex-col w-72 bg-[#1a1a1a] text-white h-full sticky top-0 shadow-2xl relative overflow-hidden flex-shrink-0">
+      {/* Sidebar (Desktop) */}
+      <aside className="hidden md:flex flex-col w-72 bg-[#1a1a1a] text-white h-full sticky top-0 shadow-2xl relative overflow-hidden flex-shrink-0 min-w-0">
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none xhosa-pattern rotate-45 scale-150" />
         <div className="bead-accent absolute top-0 left-0 w-full opacity-50" />
-        <div className="p-8 relative z-10 flex-1 flex flex-col">
+        <div className="p-8 relative z-10 flex-1 flex flex-col overflow-y-auto custom-scrollbar">
           <div className="flex justify-between items-start mb-10">
             <div className="flex items-center gap-3">
               <div className="bg-[#1a1a1a] p-2 rounded-xl shadow-lg rotate-3 relative overflow-hidden group border border-white/10">
@@ -195,9 +196,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-lg border border-white/10 relative overflow-hidden ${userRole === UserRole.LENDER ? 'bg-indigo-600' : 'bg-emerald-600'}`}>
                   {displayUserName[0]}
                 </div>
-                <div>
-                  <p className="font-black text-sm uppercase tracking-tight text-white">{displayUserName}</p>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{userRole === UserRole.LENDER ? 'Village Lender' : 'Verified Borrower'}</p>
+                <div className="min-w-0">
+                  <p className="font-black text-sm uppercase tracking-tight text-white truncate">{displayUserName}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest truncate">{userRole === UserRole.LENDER ? 'Village Lender' : 'Verified Borrower'}</p>
                 </div>
               </div>
             </div>
@@ -205,10 +206,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
         </div>
       </aside>
 
-      {/* Main Content Area - Scrollable */}
+      {/* Main Content Area */}
       <main 
         ref={scrollContainerRef}
-        className="flex-1 flex flex-col h-full overflow-y-auto relative custom-scrollbar pt-[72px] md:pt-0"
+        className="flex-1 flex flex-col h-full overflow-y-auto overflow-x-hidden relative custom-scrollbar pt-[72px] md:pt-0 min-w-0"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -236,12 +237,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
           </div>
         </div>
 
-        <div className="flex-1 p-4 md:p-10 relative">
+        <div className="flex-1 p-4 md:p-10 relative overflow-x-hidden">
           <div className="absolute top-0 right-0 w-96 h-96 opacity-[0.02] pointer-events-none xhosa-accent-pattern scale-150 rotate-12 -z-10" />
           
           <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-            <div>
-              <h2 className="text-3xl font-black text-gray-900 tracking-tight uppercase">
+            <div className="min-w-0">
+              <h2 className="text-3xl font-black text-gray-900 tracking-tight uppercase truncate">
                 {activeTab === 'dashboard' && (userRole === UserRole.LENDER 
                   ? `${getGreeting()}, ${t.dashboard}` 
                   : `${getGreeting()}, ${displayUserName.split(' ')[0]} 😊`)}
@@ -251,14 +252,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
                 {activeTab === 'settings' && t.settings}
               </h2>
               <div className="flex items-center gap-3 mt-1">
-                <p className="text-gray-500 text-sm font-medium">
+                <p className="text-gray-500 text-sm font-medium truncate max-w-md">
                   {activeTab === 'dashboard' && (userRole === UserRole.LENDER ? t.statsDesc : 'Your current financial standing and trust score.')}
                   {activeTab === 'loans' && (userRole === UserRole.LENDER ? 'Ledger of current commitments' : 'Track your repayments and upcoming dues.')}
                   {activeTab === 'borrowers' && 'Your trusted community network'}
                   {activeTab === 'calculator' && 'Financial growth projections'}
                   {activeTab === 'settings' && 'Platform operational motifs'}
                 </p>
-                <div className="h-0.5 w-12 beaded-divider opacity-40" />
+                <div className="h-0.5 w-12 beaded-divider opacity-40 shrink-0" />
               </div>
             </div>
             <div className="flex gap-4">
