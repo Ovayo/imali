@@ -10,7 +10,7 @@ import {
   ArrowRight, Wallet, ChevronRight, History, Info, X, Edit2, Loader2, Eye, MapPin, Fingerprint, 
   Key, Lock, UserCircle, ReceiptText, Zap, AlertTriangle,
   Shield, Users, BarChart3, Send, Info as InfoIcon, Sun, Cloud, CloudRain, Thermometer, Wind, Droplets,
-  Calendar, Percent, Scale, Calculator, Settings, RefreshCw, Trash2
+  Calendar, Percent, Scale, Calculator, Settings, RefreshCw, Trash2, Home, Mail as MailIcon, Phone, Clock
 } from 'lucide-react';
 import { 
   DEFAULT_INTEREST_RATE, 
@@ -66,10 +66,6 @@ const App: React.FC = () => {
   // Simulated Weather State
   const [currentWeather, setCurrentWeather] = useState<keyof typeof WEATHER_THEMES>('sunny');
   const theme = WEATHER_THEMES[currentWeather];
-
-  const [showLenderAuthModal, setShowLenderAuthModal] = useState(false);
-  const [lenderAuthInput, setLenderAuthInput] = useState('');
-  const [lenderAuthError, setLenderAuthError] = useState(false);
 
   const LENDER_EMAIL = 'montiovayo@gmail.com';
 
@@ -332,7 +328,7 @@ const App: React.FC = () => {
   const handleSendNotifications = async (targetLoan?: Loan) => {
     setIsSendingNotifications(true);
     const overdueLoans = targetLoan ? [targetLoan] : loans.filter(l => l.status === RepaymentStatus.OVERDUE);
-    if (overdueLoans.length === 0) {
+    if (overdueLoans.length === 0 && !targetLoan) {
       setIsSendingNotifications(false);
       setShowToast(language === Language.XH ? 'Akukho mboleko idlulileyo ixesha.' : 'No overdue loans found.');
       setTimeout(() => setShowToast(null), 3000);
@@ -360,6 +356,38 @@ const App: React.FC = () => {
     }
   };
 
+  const handleEditBorrower = (borrower: any) => {
+    setEditingBorrower({
+      idNumber: borrower.idNumber,
+      name: borrower.name,
+      address: borrower.address,
+      phone: borrower.phone,
+      email: borrower.email || ''
+    });
+    setIsEditBorrowerModalOpen(true);
+  };
+
+  const handleSaveBorrowerChanges = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBorrower) return;
+    setLoans(prev => prev.map(l => {
+      if (l.idNumber === editingBorrower.idNumber) {
+        return {
+          ...l,
+          borrowerName: editingBorrower.name,
+          borrowerNumber: editingBorrower.phone,
+          physicalAddress: editingBorrower.address,
+          email: editingBorrower.email
+        };
+      }
+      return l;
+    }));
+    setIsEditBorrowerModalOpen(false);
+    setEditingBorrower(null);
+    setShowToast(language === Language.XH ? 'Iinkcukacha zihlaziyiwe!' : 'Borrower details updated!');
+    setTimeout(() => setShowToast(null), 3000);
+  };
+
   const handleMarkAsPaid = (loanId: string) => {
     setLoans(prev => prev.map(l => {
       if (l.id === loanId) {
@@ -372,19 +400,11 @@ const App: React.FC = () => {
       }
       return l;
     }));
+    if (selectedLoan?.id === loanId) {
+       setSelectedLoan(prev => prev ? {...prev, status: RepaymentStatus.PAID} : null);
+    }
     setShowToast(language === Language.XH ? 'Intlawulo ifunyenwe!' : 'Payment recorded!');
     setTimeout(() => setShowToast(null), 3000);
-  };
-
-  const handleEditBorrower = (borrower: any) => {
-    setEditingBorrower({
-      idNumber: borrower.idNumber,
-      name: borrower.name,
-      address: borrower.address,
-      phone: borrower.phone,
-      email: borrower.email || ''
-    });
-    setIsEditBorrowerModalOpen(true);
   };
 
   const handleLogout = () => {
@@ -427,6 +447,10 @@ const App: React.FC = () => {
       )}
     </div>
   );
+
+  const selectedBorrower = useMemo(() => {
+    return borrowers.find(b => b.idNumber === selectedBorrowerId) || null;
+  }, [borrowers, selectedBorrowerId]);
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
@@ -585,9 +609,21 @@ const App: React.FC = () => {
                       <p className="text-sm font-black text-gray-900">R {loan.amountLoaned.toLocaleString()}</p>
                       <div className="flex gap-2">
                         {userRole === UserRole.LENDER && (
-                          <button onClick={() => handleDeleteLoan(loan.id)} className="p-2 text-rose-400 hover:text-rose-600 transition-colors">
-                            <Trash2 size={16} />
-                          </button>
+                          <>
+                            {loan.status !== RepaymentStatus.PAID && (
+                              <>
+                                <button onClick={() => handleSendNotifications(loan)} title="WhatsApp Reminder" className="p-2 text-emerald-500 bg-emerald-50 rounded-lg">
+                                  <Smartphone size={16} />
+                                </button>
+                                <button onClick={() => handleMarkAsPaid(loan.id)} title="Mark as Paid" className="p-2 text-amber-500 bg-amber-50 rounded-lg">
+                                  <CheckCircle2 size={16} />
+                                </button>
+                              </>
+                            )}
+                            <button onClick={() => handleDeleteLoan(loan.id)} className="p-2 text-rose-400 bg-rose-50 rounded-lg">
+                              <Trash2 size={16} />
+                            </button>
+                          </>
                         )}
                         <ChevronRight onClick={() => setSelectedLoan(loan)} size={16} className="text-gray-300 group-active:text-indigo-600 cursor-pointer" />
                       </div>
@@ -604,7 +640,12 @@ const App: React.FC = () => {
                       <th className="px-8 py-5">Borrower Name</th>
                       <th className="px-8 py-5">Amount Loaned</th>
                       <th className="px-8 py-5">Due Date</th>
-                      <th className="px-8 py-5">Total Amount Due</th>
+                      <th className="px-8 py-5">
+                         <div className="flex items-center gap-1">
+                            Total Amount Due
+                            <InfoIcon size={12} title="Penalty of X% applies weekly if overdue" className="text-gray-300 cursor-help" />
+                         </div>
+                      </th>
                       <th className="px-8 py-5">Status</th>
                       <th className="px-8 py-5 text-center">Action</th>
                     </tr>
@@ -625,15 +666,32 @@ const App: React.FC = () => {
                         </td>
                         <td className="px-8 py-6 text-xs font-bold text-gray-600">{loan.dueDate}</td>
                         <td className="px-8 py-6">
-                          <p className="font-black text-indigo-600 font-mono text-sm">R {(loan.totalRepayment + calculatePenaltyDetails(loan).penalty).toLocaleString()}</p>
+                          <div className="flex flex-col">
+                            <p className="font-black text-indigo-600 font-mono text-sm">R {(loan.totalRepayment + calculatePenaltyDetails(loan).penalty).toLocaleString()}</p>
+                            <p className="text-[9px] text-gray-400 font-bold leading-none mt-1 uppercase tracking-tighter" title={`${loan.penaltyRate}% of principal per week overdue`}>
+                               {loan.penaltyRate}% of principal/wk
+                            </p>
+                          </div>
                         </td>
                         <td className="px-8 py-6"><StatusDot status={loan.status} showLabel /></td>
                         <td className="px-8 py-6 flex justify-center gap-2">
-                          <button onClick={() => setSelectedLoan(loan)} className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm">
+                          <button onClick={() => setSelectedLoan(loan)} title="View Details" className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm">
                             <Eye size={18} />
                           </button>
+                          
+                          {userRole === UserRole.LENDER && loan.status !== RepaymentStatus.PAID && (
+                            <>
+                              <button onClick={() => handleSendNotifications(loan)} title="Send WhatsApp Reminder" className="p-3 bg-white text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all border border-gray-100 shadow-sm">
+                                <Smartphone size={18} />
+                              </button>
+                              <button onClick={() => handleMarkAsPaid(loan.id)} title="Mark as Paid" className="p-3 bg-white text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all border border-gray-100 shadow-sm">
+                                <CheckCircle2 size={18} />
+                              </button>
+                            </>
+                          )}
+
                           {userRole === UserRole.LENDER && (
-                            <button onClick={() => handleDeleteLoan(loan.id)} className="p-3 bg-white text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-gray-100 shadow-sm">
+                            <button onClick={() => handleDeleteLoan(loan.id)} title="Delete Record" className="p-3 bg-white text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-gray-100 shadow-sm">
                               <Trash2 size={18} />
                             </button>
                           )}
@@ -918,6 +976,243 @@ const App: React.FC = () => {
           )}
         </div>
       </Layout>
+
+      {/* Loan Detail Modal */}
+      {selectedLoan && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-gray-950/60 backdrop-blur-md" onClick={() => setSelectedLoan(null)} />
+          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] md:rounded-[40px] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
+             <div className="p-6 md:p-8 border-b border-gray-50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                   <div className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-lg rotate-1 uppercase tracking-tighter">
+                      {selectedLoan.id}
+                   </div>
+                   <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">{language === Language.EN ? 'Transaction Detail' : 'Iinkcukacha Zentengiselwano'}</h3>
+                </div>
+                <button onClick={() => setSelectedLoan(null)} className="p-2 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-full transition-all">
+                   <X size={24} />
+                </button>
+             </div>
+
+             <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-8">
+                <div className="flex items-center gap-6">
+                   <div className="w-20 h-20 rounded-3xl bg-gray-50 flex items-center justify-center text-indigo-600 border border-gray-100">
+                      <UserCircle size={48} />
+                   </div>
+                   <div>
+                      <h4 className="text-2xl font-black text-gray-900 leading-none mb-2">{selectedLoan.borrowerName}</h4>
+                      <div className="flex flex-wrap items-center gap-4 text-[10px] text-gray-400 font-black uppercase tracking-widest">
+                         <span className="flex items-center gap-1"><Smartphone size={12} /> {selectedLoan.borrowerNumber}</span>
+                         <span className="flex items-center gap-1"><Fingerprint size={12} /> {selectedLoan.idNumber}</span>
+                      </div>
+                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                   <div className="bg-gray-50 p-5 rounded-3xl border border-gray-100">
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{t.principal}</p>
+                      <p className="text-lg font-black text-gray-900">R {selectedLoan.amountLoaned.toLocaleString()}</p>
+                   </div>
+                   <div className="bg-gray-50 p-5 rounded-3xl border border-gray-100">
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{t.interest}</p>
+                      <p className="text-lg font-black text-indigo-600">R {(selectedLoan.totalRepayment - selectedLoan.amountLoaned).toLocaleString()}</p>
+                   </div>
+                   <div className="bg-indigo-50 p-5 rounded-3xl border border-indigo-100 col-span-2 md:col-span-1 relative overflow-hidden">
+                      <div className="absolute top-1 right-1 opacity-20">
+                         <InfoIcon size={12} className="text-indigo-400" />
+                      </div>
+                      <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">{t.totalDue}</p>
+                      <p className="text-lg font-black text-indigo-600">R {(selectedLoan.totalRepayment + calculatePenaltyDetails(selectedLoan).penalty).toLocaleString()}</p>
+                      <p className="text-[8px] font-bold text-indigo-400/70 mt-1 uppercase tracking-tighter">
+                         {calculatePenaltyDetails(selectedLoan).penalty > 0 
+                            ? `Includes R${calculatePenaltyDetails(selectedLoan).penalty} penalty` 
+                            : `Penalty: ${selectedLoan.penaltyRate}%/week overdue`}
+                      </p>
+                   </div>
+                </div>
+
+                <div className="space-y-4">
+                   <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                      <Clock size={14} className="text-indigo-600" />
+                      {language === Language.EN ? 'Chronology' : 'Ixesha'}
+                   </h5>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-1">
+                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Disbursed / Umhla Wokuqala</p>
+                         <p className="text-sm font-bold text-gray-700 font-mono">{selectedLoan.startDate}</p>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{t.dueDate}</p>
+                         <p className="text-sm font-bold text-gray-700 font-mono">{selectedLoan.dueDate}</p>
+                      </div>
+                   </div>
+                </div>
+
+                <div className="space-y-4">
+                   <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                      <ReceiptText size={14} className="text-indigo-600" />
+                      {language === Language.EN ? 'Action Ledger' : 'Uvimba weentlawulo'}
+                   </h5>
+                   <div className="divide-y divide-gray-50 border border-gray-50 rounded-2xl overflow-hidden">
+                      {selectedLoan.history.map((h, i) => (
+                         <div key={i} className="px-6 py-4 flex items-center justify-between bg-white hover:bg-gray-50 transition-colors">
+                            <div>
+                               <p className="text-xs font-black text-gray-900 uppercase tracking-tight">{h.action}</p>
+                               <p className="text-[10px] font-bold text-gray-400 font-mono">{h.date}</p>
+                            </div>
+                            {h.amount && (
+                               <p className="text-sm font-black text-gray-900">R {h.amount.toLocaleString()}</p>
+                            )}
+                         </div>
+                      ))}
+                   </div>
+                </div>
+             </div>
+
+             <div className="p-6 md:p-8 bg-gray-50/50 border-t border-gray-50 flex flex-wrap gap-4 justify-end">
+                {userRole === UserRole.LENDER && selectedLoan.status !== RepaymentStatus.PAID && (
+                   <>
+                      <button 
+                        onClick={() => handleSendNotifications(selectedLoan)} 
+                        className="flex-1 md:flex-none px-6 py-3.5 bg-emerald-50 text-emerald-600 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-emerald-100 hover:bg-emerald-100 transition-all flex items-center justify-center gap-2"
+                      >
+                         <Smartphone size={16} /> WhatsApp
+                      </button>
+                      <button 
+                        onClick={() => handleMarkAsPaid(selectedLoan.id)} 
+                        className="flex-1 md:flex-none px-6 py-3.5 bg-amber-50 text-amber-600 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-amber-100 hover:bg-amber-100 transition-all flex items-center justify-center gap-2"
+                      >
+                         <CheckCircle2 size={16} /> {language === Language.EN ? 'Mark Paid' : 'Ihlawulwe'}
+                      </button>
+                   </>
+                )}
+                <button 
+                  onClick={() => setSelectedLoan(null)} 
+                  className="w-full md:w-auto px-8 py-3.5 bg-[#1a1a1a] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black transition-all"
+                >
+                   {language === Language.EN ? 'Close Record' : 'Vala Iphrofayili'}
+                </button>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Borrower Profile Modal */}
+      {selectedBorrower && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-gray-950/40 backdrop-blur-xl" onClick={() => setSelectedBorrowerId(null)} />
+          <div className="bg-white w-full max-w-4xl rounded-[2.5rem] md:rounded-[40px] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="absolute top-0 left-0 w-full h-32 bg-[#1a1a1a] p-8 flex items-end">
+              <div className="absolute top-4 right-4"><button onClick={() => setSelectedBorrowerId(null)} className="p-2 bg-white/10 text-white hover:bg-white/20 rounded-full transition-all"><X size={24} /></button></div>
+              <div className="flex items-center gap-6 translate-y-12">
+                <div className="w-24 h-24 md:w-32 md:h-32 rounded-[2rem] bg-indigo-600 flex items-center justify-center text-white text-4xl font-black shadow-2xl border-4 border-white">{selectedBorrower.name[0]}</div>
+                <div className="mb-2">
+                  <h3 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight">{selectedBorrower.name}</h3>
+                  <p className="text-xs md:text-sm font-black text-indigo-600 uppercase tracking-[0.2em]">{language === Language.EN ? 'Verified Member' : 'Ilungu eliqinisekisiweyo'}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="pt-24 md:pt-32 p-6 md:p-12 overflow-y-auto custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+                <div className="space-y-6">
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{language === Language.EN ? 'Contact Details' : 'Iinkcukacha zoqhagamshelwano'}</h4>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 text-sm font-bold text-gray-600"><Smartphone size={16} className="text-indigo-600" /> {selectedBorrower.phone}</div>
+                    <div className="flex items-center gap-3 text-sm font-bold text-gray-600"><MailIcon size={16} className="text-indigo-600" /> {selectedBorrower.email}</div>
+                    <div className="flex items-center gap-3 text-sm font-bold text-gray-600"><Home size={16} className="text-indigo-600" /> {selectedBorrower.address}</div>
+                    <div className="flex items-center gap-3 text-sm font-bold text-gray-600"><Fingerprint size={16} className="text-indigo-600" /> {selectedBorrower.idNumber}</div>
+                  </div>
+                </div>
+                
+                <div className="col-span-1 md:col-span-2 space-y-6">
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{language === Language.EN ? 'Financial Motif' : 'Imbali yemali'}</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{language === Language.EN ? 'Trust Score' : 'Inqaku lentembeko'}</p>
+                      <p className={`text-3xl font-black ${selectedBorrower.score >= 700 ? 'text-emerald-600' : 'text-indigo-600'}`}>{selectedBorrower.score}</p>
+                    </div>
+                    <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{language === Language.EN ? 'Total Loans' : 'Zizonke iimali'}</p>
+                      <p className="text-3xl font-black text-gray-900">{selectedBorrower.loans.length}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <History size={16} className="text-indigo-600" />
+                  {language === Language.EN ? 'Loan Ledger' : 'Uvimba wemboleko'}
+                </h4>
+                <div className="divide-y divide-gray-50 border-t border-gray-50">
+                  {selectedBorrower.loans.map((loan) => (
+                    <div key={loan.id} className="py-4 flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded uppercase">{loan.id}</span>
+                          <StatusDot status={loan.status} />
+                        </div>
+                        <p className="text-xs font-bold text-gray-400 font-mono">{loan.startDate} — {loan.dueDate}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-black text-gray-900">R {loan.amountLoaned.toLocaleString()}</p>
+                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mt-0.5">{language === Language.EN ? 'Total Due' : 'Imali iyonke'}: R {loan.totalRepayment.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-8 border-t border-gray-50 bg-gray-50/50 flex justify-end gap-4">
+               <button onClick={() => setSelectedBorrowerId(null)} className="px-8 py-4 bg-white border border-gray-100 rounded-[20px] text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 transition-all">{language === Language.EN ? 'Close Detail' : 'Vala iinkcukacha'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Borrower Modal */}
+      {isEditBorrowerModalOpen && editingBorrower && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-gray-950/40 backdrop-blur-xl" onClick={() => setIsEditBorrowerModalOpen(false)} />
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden">
+            <div className="p-8 border-b border-gray-50 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">{language === Language.EN ? 'Edit Borrower' : 'Hlela umboleki'}</h3>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">{editingBorrower.idNumber}</p>
+              </div>
+              <button onClick={() => setIsEditBorrowerModalOpen(false)} className="p-2 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-full transition-all"><X size={20} /></button>
+            </div>
+            <form onSubmit={handleSaveBorrowerChanges} className="p-8 space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] px-1">{language === Language.EN ? 'Full Name' : 'Igama neFani'}</label>
+                  <input required value={editingBorrower.name} onChange={e => setEditingBorrower({...editingBorrower, name: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] px-1">{language === Language.EN ? 'Mobile Number' : 'Inombolo yeSelfowuni'}</label>
+                  <input required value={editingBorrower.phone} onChange={e => setEditingBorrower({...editingBorrower, phone: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] px-1">{language === Language.EN ? 'Email' : 'I-Email'}</label>
+                  <input required value={editingBorrower.email} onChange={e => setEditingBorrower({...editingBorrower, email: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] px-1">{language === Language.EN ? 'Physical Address' : 'Idilesi'}</label>
+                  <textarea required rows={2} value={editingBorrower.address} onChange={e => setEditingBorrower({...editingBorrower, address: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner resize-none" />
+                </div>
+              </div>
+              <div className="pt-4 flex gap-4">
+                <button type="button" onClick={() => setIsEditBorrowerModalOpen(false)} className="flex-1 py-4 bg-gray-50 text-gray-400 font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-gray-100 transition-all">{language === Language.EN ? 'Cancel' : 'Rhoxisa'}</button>
+                <button type="submit" className="flex-1 py-4 bg-[#1a1a1a] text-white font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-black shadow-xl transition-all flex items-center justify-center gap-2">
+                  <Save size={16} /> {language === Language.EN ? 'Save Changes' : 'Gcina utshintsho'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
