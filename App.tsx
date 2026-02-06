@@ -11,7 +11,7 @@ import {
   Key, Lock, UserCircle, ReceiptText, Zap, AlertTriangle,
   Shield, Users, BarChart3, Send, Info as InfoIcon, Sun, Cloud, CloudRain, Thermometer, Wind, Droplets,
   Calendar, Percent, Scale, Calculator, Settings, RefreshCw, Trash2, Home, Mail as MailIcon, Phone, Clock, LogIn,
-  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation, ToggleLeft, ToggleRight, Check, Globe, Languages
+  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation, ToggleLeft, ToggleRight, Check, Globe, Languages, Building2, Briefcase
 } from 'lucide-react';
 import { 
   DEFAULT_INTEREST_RATE, 
@@ -22,35 +22,18 @@ import {
 
 const LENDER_PASSWORD = 'imali-admin';
 
-const CITY_IMAGES: Record<string, string> = {
-  'East London': 'https://images.unsplash.com/photo-1549405626-ec49a7442168?q=80&w=2000&auto=format&fit=crop',
-  'Gqeberha': 'https://images.unsplash.com/photo-1571401138243-98282367d344?q=80&w=2000&auto=format&fit=crop',
-  'Mthatha': 'https://images.unsplash.com/photo-1523805081730-6144a77fb30b?q=80&w=2000&auto=format&fit=crop',
-  'Qonce': 'https://images.unsplash.com/photo-1560935574-d45607062f6b?q=80&w=2000&auto=format&fit=crop',
-  'Butterworth': 'https://images.unsplash.com/photo-1506466010722-395aa2bef877?q=80&w=2000&auto=format&fit=crop',
-  'Mdantsane': 'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=2000&auto=format&fit=crop',
-  'Alice': 'https://images.unsplash.com/photo-1523438097201-512ae7d59c44?q=80&w=2000&auto=format&fit=crop',
-  'Eastern Cape': 'https://images.unsplash.com/photo-1590483736622-39da8af7ec8d?q=80&w=2000&auto=format&fit=crop'
-};
-
-const WEATHER_THEMES = {
-  sunny: {
-    condition: 'Sunny', temp: '24°', icon: Sun, accent: 'text-yellow-400', tag: 'Perfect day for growth',
-    overlay: 'bg-emerald-900/40', wind: '12km/h', humidity: '42%', vibe: 'High Growth Potential'
-  },
-  cloudy: {
-    condition: 'Overcast', temp: '19°', icon: Cloud, accent: 'text-blue-200', tag: 'Steady skies ahead',
-    overlay: 'bg-emerald-950/50', wind: '8km/h', humidity: '65%', vibe: 'Calculated Stability'
-  },
-  rainy: {
-    condition: 'Rainy', temp: '16°', icon: CloudRain, accent: 'text-blue-400', tag: 'Rain brings abundance',
-    overlay: 'bg-emerald-950/60', wind: '18km/h', humidity: '88%', vibe: 'Seeding Prosperity'
-  }
-};
+const EMPLOYMENT_STATUSES = [
+  'Full-time',
+  'Part-time',
+  'Self-employed',
+  'Contract',
+  'Unemployed',
+  'Student',
+  'Retired'
+];
 
 const App: React.FC = () => {
   const [appLoading, setAppLoading] = useState(true);
-  const [loadingStep, setLoadingStep] = useState(0);
   const [language, setLanguage] = useState<Language>(Language.EN);
   const [activeTab, setActiveTab] = useState('dashboard');
   
@@ -74,8 +57,7 @@ const App: React.FC = () => {
   const [loginId, setLoginId] = useState('');
   const [regForm, setRegForm] = useState({ name: '', id: '', phone: '', address: '' });
   
-  const [currentWeather, setCurrentWeather] = useState<keyof typeof WEATHER_THEMES>('sunny');
-  const weather = WEATHER_THEMES[currentWeather];
+  const [currentWeather, setCurrentWeather] = useState<'sunny' | 'cloudy' | 'rainy'>('sunny');
 
   const [loans, setLoans] = useState<Loan[]>(() => {
     const saved = localStorage.getItem('imali_loans_v1');
@@ -98,6 +80,19 @@ const App: React.FC = () => {
       emailOverdueAlerts: true,
       darkMode: false
     };
+  });
+
+  // New Loan Form State
+  const [newLoanForm, setNewLoanForm] = useState({
+    borrowerName: '',
+    idNumber: '',
+    physicalAddress: '',
+    borrowerNumber: '',
+    employer: '',
+    employmentStatus: 'Full-time',
+    amountLoaned: 1000,
+    dueDate: '',
+    payoutMethod: PayoutMethod.MOBILE
   });
 
   useEffect(() => {
@@ -124,7 +119,7 @@ const App: React.FC = () => {
 
   const t = TRANSLATIONS[language];
 
-  // Geolocation Effect with Reverse Geocoding
+  // Geolocation Effect
   useEffect(() => {
     if ("geolocation" in navigator && loggedInBorrowerId) {
       setIsLocating(true);
@@ -143,8 +138,6 @@ const App: React.FC = () => {
           }
           
           setIsLocating(false);
-          const variants: (keyof typeof WEATHER_THEMES)[] = ['sunny', 'cloudy', 'rainy'];
-          setCurrentWeather(variants[Math.floor(Math.random() * variants.length)]);
         },
         (error) => {
           console.warn("Geolocation denied or unavailable:", error);
@@ -235,12 +228,6 @@ const App: React.FC = () => {
     return borrowers.find(b => b.idNumber === loggedInBorrowerId) || null;
   }, [borrowers, loggedInBorrowerId]);
 
-  const currentBorrowerCity = useMemo(() => {
-    if (!currentBorrowerAccount) return "East London";
-    const parts = currentBorrowerAccount.address.split(',');
-    return parts[0].trim();
-  }, [currentBorrowerAccount]);
-
   const handleLenderAuth = (e: React.FormEvent) => {
     e.preventDefault();
     if (lenderPassInput === LENDER_PASSWORD) {
@@ -286,6 +273,41 @@ const App: React.FC = () => {
     setLoggedInBorrowerId(newProfile.idNumber);
     setShowToast(language === Language.XH ? "Ubhalise ngempumelelo!" : "Registration successful! Welcome to the community.");
     setTimeout(() => setShowToast(null), 3000);
+  };
+
+  const handleCreateLoan = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newId = `T0${loans.length + 1}`;
+    const interest = Math.round(newLoanForm.amountLoaned * (DEFAULT_INTEREST_RATE / 100));
+    const newLoan: Loan = {
+      id: newId,
+      ...newLoanForm,
+      interestRate: DEFAULT_INTEREST_RATE,
+      penaltyRate: DEFAULT_PENALTY_RATE,
+      totalRepayment: newLoanForm.amountLoaned + interest,
+      startDate: new Date().toISOString().split('T')[0],
+      status: RepaymentStatus.PENDING,
+      applicationStatus: ApplicationStatus.SUBMITTED,
+      history: [
+        { date: new Date().toISOString().split('T')[0], action: 'Loan Application Submitted', amount: newLoanForm.amountLoaned }
+      ]
+    };
+    setLoans(prev => [newLoan, ...prev]);
+    setIsAddModalOpen(false);
+    setShowToast(language === Language.XH ? 'Iakhawunti yemali ivuliwe!' : 'Loan account created successfully!');
+    setTimeout(() => setShowToast(null), 3000);
+    // Reset form
+    setNewLoanForm({
+      borrowerName: '',
+      idNumber: '',
+      physicalAddress: '',
+      borrowerNumber: '',
+      employer: '',
+      employmentStatus: 'Full-time',
+      amountLoaned: 1000,
+      dueDate: '',
+      payoutMethod: PayoutMethod.MOBILE
+    });
   };
 
   const filteredAndSortedLoans = useMemo(() => {
@@ -341,20 +363,15 @@ const App: React.FC = () => {
     setTimeout(() => setShowToast(null), 3000);
   };
 
-  const handleLogout = () => {
-    setLoggedInBorrowerId(null);
-    setIsLenderAuthenticated(false);
-    setUserRole(UserRole.BORROWER);
-    setActiveTab('dashboard');
-    setUserLocation(null);
-    setDetectedCity(null);
-  };
-
   const toggleRole = () => {
     if (userRole === UserRole.BORROWER) {
-      if (!isLenderAuthenticated) { setUserRole(UserRole.LENDER); }
-      else { setUserRole(UserRole.LENDER); }
-    } else { handleLogout(); }
+      setUserRole(UserRole.LENDER);
+    } else {
+      setLoggedInBorrowerId(null);
+      setIsLenderAuthenticated(false);
+      setUserRole(UserRole.BORROWER);
+      setActiveTab('dashboard');
+    }
   };
 
   const StatusDot = ({ status, showLabel = false }: { status: RepaymentStatus, showLabel?: boolean }) => {
@@ -502,7 +519,7 @@ const App: React.FC = () => {
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">{language === Language.XH ? 'Inombolo ye-ID' : 'ID Number'}</label>
                       <div className="relative group">
                         <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
-                        <input required value={loginId} onChange={setLoginId} placeholder="e.g. 9201010001081" className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-4 font-black text-sm tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner text-gray-900" />
+                        <input required value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="e.g. 9201010001081" className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-4 font-black text-sm tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner text-gray-900" />
                       </div>
                     </div>
                     <button type="submit" className="w-full py-5 bg-[#1a1a1a] text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-3"><span>Secure Access</span><ArrowRight size={18} /></button>
@@ -555,7 +572,7 @@ const App: React.FC = () => {
                       className="p-6 md:p-10 rounded-[2.5rem] md:rounded-[48px] text-white shadow-2xl relative overflow-hidden group min-h-[460px] md:min-h-[520px] flex flex-col justify-between transition-all duration-700 bg-cover bg-center"
                       style={{ backgroundImage: "url('https://westharlem.art/wp-content/uploads/2021/02/gum-front-page-website-2.jpg')" }}
                     >
-                      <div className={`absolute inset-0 ${weather.overlay} backdrop-blur-[1px] transition-colors duration-700`} />
+                      <div className="absolute inset-0 bg-emerald-900/40 backdrop-blur-[1px] transition-colors duration-700" />
                       
                       <div className="relative z-10 flex flex-col gap-6">
                         <div className="flex items-center justify-between">
@@ -570,7 +587,7 @@ const App: React.FC = () => {
                               <>
                                 <div className={`w-2 h-2 rounded-full ${isLocating ? 'bg-amber-400 animate-spin' : 'bg-gray-400'}`} />
                                 <MapPin size={10} className="text-white/80" /> 
-                                {isLocating ? 'Locating...' : currentBorrowerCity}
+                                {isLocating ? 'Locating...' : 'East London'}
                               </>
                             )}
                           </div>
@@ -578,9 +595,9 @@ const App: React.FC = () => {
 
                         <div className="grid grid-cols-3 gap-3">
                           {[
-                            { icon: Thermometer, val: weather.temp, label: 'Temp' },
-                            { icon: Wind, val: weather.wind, label: 'Wind' },
-                            { icon: Droplets, val: weather.humidity, label: 'Humid' }
+                            { icon: Thermometer, val: '24°', label: 'Temp' },
+                            { icon: Wind, val: '12km/h', label: 'Wind' },
+                            { icon: Droplets, val: '42%', label: 'Humid' }
                           ].map((item, idx) => (
                             <div key={idx} className="bg-black/30 backdrop-blur-md rounded-3xl p-4 border border-white/10 hover:bg-black/40 transition-all">
                               <item.icon size={14} className="text-white/60 mb-2" />
@@ -594,7 +611,7 @@ const App: React.FC = () => {
                       <div className="relative z-10 space-y-6">
                         <div className="space-y-2">
                           <div className="inline-flex items-center gap-2 px-3 py-1 bg-white text-emerald-950 rounded-full text-[8px] font-black uppercase tracking-[0.2em] shadow-lg">
-                            <Zap size={10} fill="currentColor" /> {weather.vibe}
+                            <Zap size={10} fill="currentColor" /> High Growth Potential
                           </div>
                           <h3 className="text-3xl md:text-5xl font-black uppercase tracking-tighter leading-[0.9] drop-shadow-2xl text-white">Unlock Your <br />Financial Flow</h3>
                         </div>
@@ -680,13 +697,23 @@ const App: React.FC = () => {
                 <div className="hidden md:block overflow-x-auto relative z-10 custom-scrollbar">
                   <table className="w-full text-left">
                     <thead className="bg-gray-50/50 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">
-                      <tr><th className="px-8 py-5">Transaction ID</th><th className="px-8 py-5">Borrower Name</th><th className="px-8 py-5">Amount Loaned</th><th className="px-8 py-5">Due Date</th><th className="px-8 py-5">Total Amount Due</th><th className="px-8 py-5">Status</th><th className="px-8 py-5 text-center">Action</th></tr>
+                      <tr>
+                        <th className="px-8 py-5">Transaction ID</th>
+                        <th className="px-8 py-5">Borrower Name</th>
+                        <th className="px-8 py-5">Borrower Number</th>
+                        <th className="px-8 py-5">Amount Loaned</th>
+                        <th className="px-8 py-5">Due Date</th>
+                        <th className="px-8 py-5">Total Amount Due</th>
+                        <th className="px-8 py-5">Status</th>
+                        <th className="px-8 py-5 text-center">Action</th>
+                      </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {filteredAndSortedLoans.map((loan) => (
                         <tr key={loan.id} className="hover:bg-gray-50/80 transition-all">
                           <td className="px-8 py-6"><div className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-lg rotate-1 inline-block uppercase tracking-tighter border border-white/20">{loan.id}</div></td>
                           <td className="px-8 py-6"><p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p></td>
+                          <td className="px-8 py-6"><p className="font-bold text-gray-500 text-xs font-mono">{loan.borrowerNumber}</p></td>
                           <td className="px-8 py-6"><p className="font-black text-gray-900 text-sm">R {loan.amountLoaned.toLocaleString()}</p></td>
                           <td className="px-8 py-6 text-xs font-bold text-gray-600">{loan.dueDate}</td>
                           <td className="px-8 py-6"><p className="font-black text-indigo-600 font-mono text-sm">R {(loan.totalRepayment + calculatePenaltyDetails(loan).penalty).toLocaleString()}</p></td>
@@ -806,7 +833,6 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="space-y-12">
-                   {/* Automation Section */}
                    <section className="space-y-6">
                       <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
                         <Zap size={16} className="text-indigo-600" />
@@ -830,7 +856,6 @@ const App: React.FC = () => {
                       </div>
                    </section>
 
-                   {/* Email Section */}
                    <section className="space-y-6">
                       <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
                         <Mail size={16} className="text-indigo-600" />
@@ -860,36 +885,125 @@ const App: React.FC = () => {
                         />
                       </div>
                    </section>
-
-                   {/* Region Section */}
-                   <section className="space-y-6">
-                      <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
-                        <Globe size={16} className="text-indigo-600" />
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Regional Preferences</h3>
-                      </div>
-                      <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center justify-between">
-                        <div className="flex items-start gap-5">
-                          <div className="p-3 rounded-2xl bg-indigo-50 text-indigo-600">
-                             <Languages size={20} />
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">Active Dialect</h4>
-                            <p className="text-[11px] text-gray-500 font-medium">Current primary interface language for all users.</p>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => setLanguage(language === Language.EN ? Language.XH : Language.EN)}
-                          className="px-6 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-xl font-black text-[10px] uppercase tracking-widest text-indigo-600 transition-all"
-                        >
-                          {language === Language.EN ? 'Switch to isiXhosa' : 'Tshintshela kwi-English'}
-                        </button>
-                      </div>
-                   </section>
                 </div>
               </div>
             )}
           </div>
         </Layout>
+      )}
+
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-gray-950/60 backdrop-blur-md" onClick={() => setIsAddModalOpen(false)} />
+          <form onSubmit={handleCreateLoan} className="bg-white w-full max-w-4xl rounded-[2.5rem] md:rounded-[40px] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
+             <div className="p-6 md:p-8 border-b border-gray-50 flex items-center justify-between sticky top-0 bg-white z-20">
+                <div className="flex items-center gap-3">
+                   <div className="bg-indigo-600 text-white p-2 rounded-xl shadow-lg"><Plus size={24} /></div>
+                   <div>
+                     <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Create Loan Account</h3>
+                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">New commitment registration</p>
+                   </div>
+                </div>
+                <button type="button" onClick={() => setIsAddModalOpen(false)} className="p-2 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-full transition-all"><X size={24} /></button>
+             </div>
+             
+             <div className="p-6 md:p-10 overflow-y-auto custom-scrollbar space-y-10">
+                {/* Personal Section */}
+                <section className="space-y-6">
+                  <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
+                    <UserCircle size={16} className="text-indigo-600" />
+                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Borrower Personal Details</h4>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Borrower Full Name</label>
+                      <input required value={newLoanForm.borrowerName} onChange={e => setNewLoanForm({...newLoanForm, borrowerName: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" placeholder="e.g. Sipho Mntungwa" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">ID Number</label>
+                      <input required value={newLoanForm.idNumber} onChange={e => setNewLoanForm({...newLoanForm, idNumber: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" placeholder="920101XXXX081" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Physical Address</label>
+                      <input required value={newLoanForm.physicalAddress} onChange={e => setNewLoanForm({...newLoanForm, physicalAddress: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" placeholder="Street, Suburb, City" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Mobile Number</label>
+                      <input required value={newLoanForm.borrowerNumber} onChange={e => setNewLoanForm({...newLoanForm, borrowerNumber: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" placeholder="071 000 0000" />
+                    </div>
+                  </div>
+                </section>
+
+                {/* Employment Section */}
+                <section className="space-y-6">
+                  <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
+                    <Building2 size={16} className="text-indigo-600" />
+                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Work & Stability Details</h4>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Employer Name</label>
+                      <div className="relative">
+                        <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
+                        <input required value={newLoanForm.employer} onChange={e => setNewLoanForm({...newLoanForm, employer: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" placeholder="Company or Organization" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Employment Status</label>
+                      <div className="relative">
+                        <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
+                        <select 
+                          required 
+                          value={newLoanForm.employmentStatus} 
+                          onChange={e => setNewLoanForm({...newLoanForm, employmentStatus: e.target.value})} 
+                          className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900 appearance-none"
+                        >
+                          {EMPLOYMENT_STATUSES.map(status => (
+                            <option key={status} value={status}>{status}</option>
+                          ))}
+                        </select>
+                        <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 rotate-90 pointer-events-none" size={18} />
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Financial Section */}
+                <section className="space-y-6">
+                  <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
+                    <Wallet size={16} className="text-indigo-600" />
+                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Financial Terms</h4>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Principal Amount (R)</label>
+                      <input type="number" required value={newLoanForm.amountLoaned} onChange={e => setNewLoanForm({...newLoanForm, amountLoaned: Number(e.target.value)})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-black text-lg shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Due Date</label>
+                      <input type="date" required value={newLoanForm.dueDate} onChange={e => setNewLoanForm({...newLoanForm, dueDate: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Payout Method</label>
+                      <select required value={newLoanForm.payoutMethod} onChange={e => setNewLoanForm({...newLoanForm, payoutMethod: e.target.value as PayoutMethod})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900 appearance-none">
+                        <option value={PayoutMethod.MOBILE}>{PayoutMethod.MOBILE}</option>
+                        <option value={PayoutMethod.BANK}>{PayoutMethod.BANK}</option>
+                      </select>
+                    </div>
+                  </div>
+                </section>
+             </div>
+             
+             <div className="p-6 md:p-8 bg-gray-50/50 border-t border-gray-50 flex flex-wrap gap-4 justify-end">
+                <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-8 py-4 bg-white border border-gray-100 rounded-2xl font-black text-[10px] uppercase tracking-widest text-gray-400 hover:text-indigo-600 transition-all">Cancel</button>
+                <button type="submit" className="px-10 py-4 bg-[#1a1a1a] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black transition-all flex items-center gap-3">
+                  <Save size={16} /> Save Loan Account
+                </button>
+             </div>
+          </form>
+        </div>
       )}
 
       {selectedLoan && (

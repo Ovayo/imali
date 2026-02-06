@@ -61,6 +61,7 @@ export interface Loan {
   email?: string; // Optional email address
   alternativeNumber?: string;
   employer?: string;
+  employmentStatus?: string; // Added field
   payoutMethod: PayoutMethod;
   bankDetails?: string;
   amountLoaned: number;
