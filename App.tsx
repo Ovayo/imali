@@ -1,4 +1,3 @@
-
 import * as React from 'react';
 import { useState, useMemo, useEffect } from 'react';
 import Layout from './components/Layout';
@@ -12,7 +11,7 @@ import {
   Key, Lock, UserCircle, ReceiptText, Zap, AlertTriangle,
   Shield, Users, BarChart3, Send, Info as InfoIcon, Sun, Cloud, CloudRain, Thermometer, Wind, Droplets,
   Calendar, Percent, Scale, Calculator, Settings, RefreshCw, Trash2, Home, Mail as MailIcon, Phone, Clock, LogIn,
-  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation
+  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation, ToggleLeft, ToggleRight, Check, Globe, Languages
 } from 'lucide-react';
 import { 
   DEFAULT_INTEREST_RATE, 
@@ -66,8 +65,9 @@ const App: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RepaymentStatus | 'All'>('All');
 
-  // Geolocation State
+  // Geolocation & City State
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [detectedCity, setDetectedCity] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
 
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -87,9 +87,26 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
+  // Settings State
+  const [settings, setSettings] = useState<UserSettings>(() => {
+    const saved = localStorage.getItem('imali_settings_v1');
+    return saved ? JSON.parse(saved) : {
+      overdueAlerts: true,
+      whatsappAutomation: true,
+      emailReports: false,
+      emailNewAppAlerts: true,
+      emailOverdueAlerts: true,
+      darkMode: false
+    };
+  });
+
   useEffect(() => {
     localStorage.setItem('imali_profiles_v1', JSON.stringify(extraProfiles));
   }, [extraProfiles]);
+
+  useEffect(() => {
+    localStorage.setItem('imali_settings_v1', JSON.stringify(settings));
+  }, [settings]);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
@@ -107,41 +124,52 @@ const App: React.FC = () => {
 
   const t = TRANSLATIONS[language];
 
-  // Geolocation Effect
+  // Geolocation Effect with Reverse Geocoding
   useEffect(() => {
     if ("geolocation" in navigator && loggedInBorrowerId) {
       setIsLocating(true);
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setUserLocation({ lat: latitude, lng: longitude });
+          
+          try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`);
+            const data = await response.json();
+            const city = data.address.city || data.address.town || data.address.village || data.address.suburb || data.address.county;
+            if (city) setDetectedCity(city);
+          } catch (err) {
+            console.error("Reverse geocoding failed", err);
+          }
+          
           setIsLocating(false);
-          // Small chance to change weather based on time or random for realism
           const variants: (keyof typeof WEATHER_THEMES)[] = ['sunny', 'cloudy', 'rainy'];
           setCurrentWeather(variants[Math.floor(Math.random() * variants.length)]);
         },
         (error) => {
           console.warn("Geolocation denied or unavailable:", error);
           setIsLocating(false);
-        }
+        },
+        { timeout: 10000 }
       );
     }
   }, [loggedInBorrowerId]);
 
-  const calcAmount = 2500;
-  const calcInterest = 30;
-  const calcWeeks = 4;
-  const calcFrequency = 'weekly';
+  // Calculator State
+  const [calcAmount, setCalcAmount] = useState<number>(2500);
+  const [calcInterest, setCalcInterest] = useState<number>(30);
+  const [calcWeeks, setCalcWeeks] = useState<number>(4);
+  const [calcFrequency, setCalcFrequency] = useState<'weekly' | 'fortnightly' | 'monthly'>('weekly');
 
   const calcResults = useMemo(() => {
-    const interest = Math.round(calcAmount * (calcInterest / 100));
-    const total = calcAmount + interest;
+    const interestAmount = Math.round(calcAmount * (calcInterest / 100));
+    const total = calcAmount + interestAmount;
     let numInstallments = calcWeeks;
-    let daysStep = 7;
+    if (calcFrequency === 'fortnightly') numInstallments = Math.max(1, Math.floor(calcWeeks / 2));
+    if (calcFrequency === 'monthly') numInstallments = Math.max(1, Math.floor(calcWeeks / 4));
+    
     const perInstallment = Math.round(total / numInstallments);
-    return { interest, total, perInstallment, numInstallments };
+    return { interestAmount, total, perInstallment, numInstallments };
   }, [calcAmount, calcInterest, calcWeeks, calcFrequency]);
 
   useEffect(() => {
@@ -213,11 +241,6 @@ const App: React.FC = () => {
     return parts[0].trim();
   }, [currentBorrowerAccount]);
 
-  const cityBackground = useMemo(() => {
-    return CITY_IMAGES[currentBorrowerCity] || CITY_IMAGES['Eastern Cape'];
-  }, [currentBorrowerCity]);
-
-  // Auth Handlers
   const handleLenderAuth = (e: React.FormEvent) => {
     e.preventDefault();
     if (lenderPassInput === LENDER_PASSWORD) {
@@ -324,6 +347,7 @@ const App: React.FC = () => {
     setUserRole(UserRole.BORROWER);
     setActiveTab('dashboard');
     setUserLocation(null);
+    setDetectedCity(null);
   };
 
   const toggleRole = () => {
@@ -371,6 +395,34 @@ const App: React.FC = () => {
   const selectedBorrower = useMemo(() => {
     return borrowers.find(b => b.idNumber === selectedBorrowerId) || null;
   }, [borrowers, selectedBorrowerId]);
+
+  const toggleSetting = (key: keyof UserSettings) => {
+    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+    setShowToast(t.updateSuccess);
+    setTimeout(() => setShowToast(null), 2000);
+  };
+
+  const SettingRow = ({ title, description, icon: Icon, active, onToggle }: any) => (
+    <div className="flex items-center justify-between p-6 bg-white rounded-[24px] border border-gray-100 shadow-sm group hover:border-indigo-100 transition-all">
+      <div className="flex items-start gap-5">
+        <div className={`p-3 rounded-2xl ${active ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-50 text-gray-400'} group-hover:scale-110 transition-transform`}>
+          <Icon size={20} />
+        </div>
+        <div className="min-w-0">
+          <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">{title}</h4>
+          <p className="text-[11px] text-gray-500 font-medium leading-relaxed">{description}</p>
+        </div>
+      </div>
+      <button 
+        onClick={onToggle}
+        className={`w-14 h-8 rounded-full p-1 transition-all duration-300 relative ${active ? 'bg-indigo-600 shadow-[0_4px_12px_rgba(79,70,229,0.3)]' : 'bg-gray-100'}`}
+      >
+        <div className={`w-6 h-6 rounded-full bg-white shadow-md transition-all duration-300 flex items-center justify-center ${active ? 'translate-x-6' : 'translate-x-0'}`}>
+           {active && <Check size={12} className="text-indigo-600" />}
+        </div>
+      </button>
+    </div>
+  );
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
@@ -426,9 +478,10 @@ const App: React.FC = () => {
                 <div className="flex flex-col items-center text-center mb-8">
                   <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center text-white shadow-xl rotate-3 mb-6 relative group overflow-hidden">
                     <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <UserCircle size={32} className="relative z-10" />
+                    <Wallet size={32} className="relative z-10" />
                   </div>
-                  <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight leading-none mb-4">
+                  <h1 className="text-5xl font-black text-indigo-600 tracking-tighter uppercase mb-1 drop-shadow-sm">imali</h1>
+                  <h2 className="text-xl font-black text-gray-400 uppercase tracking-[0.2em] leading-none mb-4">
                     {language === Language.XH ? 'Uvimba Wababoleki' : 'Borrower Hub'}
                   </h2>
                   <p className="text-sm font-medium text-gray-400 max-w-xs">
@@ -507,11 +560,11 @@ const App: React.FC = () => {
                       <div className="relative z-10 flex flex-col gap-6">
                         <div className="flex items-center justify-between">
                           <div className="px-4 py-2 bg-black/30 backdrop-blur-xl rounded-full text-[10px] font-black uppercase tracking-[0.2em] border border-white/20 shadow-lg flex items-center gap-2.5 overflow-hidden">
-                            {userLocation ? (
+                            {detectedCity ? (
                               <>
                                 <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
                                 <Navigation size={10} className="text-white/80" /> 
-                                <span className="truncate max-w-[120px]">Live: {userLocation.lat.toFixed(2)}, {userLocation.lng.toFixed(2)}</span>
+                                <span className="truncate max-w-[140px] font-black">{detectedCity} (Live)</span>
                               </>
                             ) : (
                               <>
@@ -671,6 +724,168 @@ const App: React.FC = () => {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {activeTab === 'calculator' && (
+              <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8 duration-700">
+                <div className="flex items-center gap-4 mb-8">
+                  <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg"><Calculator size={32} /></div>
+                  <div><h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">Loan Planner</h2><p className="text-gray-500 font-medium">Financial growth projections for the community.</p></div>
+                </div>
+                <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100">
+                  <div className="space-y-10">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                      <div className="space-y-6">
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-end"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount to Borrow</label><span className="font-black text-2xl text-gray-900 font-mono">R {calcAmount.toLocaleString()}</span></div>
+                          <input type="range" min="200" max="25000" step="100" value={calcAmount} onChange={e => setCalcAmount(Number(e.target.value))} className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        </div>
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-end"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Interest Rate</label><span className="font-black text-xl text-gray-900 font-mono">{calcInterest}%</span></div>
+                          <input type="range" min="0" max="60" step="5" value={calcInterest} onChange={e => setCalcInterest(Number(e.target.value))} className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        </div>
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-end"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Duration (Weeks)</label><span className="font-black text-xl text-gray-900 font-mono">{calcWeeks} Weeks</span></div>
+                          <input type="range" min="1" max="24" step="1" value={calcWeeks} onChange={e => setCalcWeeks(Number(e.target.value))} className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        </div>
+                        <div className="space-y-4">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Repayment Frequency</label>
+                          <div className="flex bg-gray-50 p-1 rounded-2xl border border-gray-100">
+                            {(['weekly', 'fortnightly', 'monthly'] as const).map(f => (
+                              <button key={f} onClick={() => setCalcFrequency(f)} className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calcFrequency === f ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400'}`}>
+                                {f}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#1a1a1a] p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-between">
+                        <div className="absolute inset-0 xhosa-pattern-sm opacity-5 pointer-events-none" />
+                        <div className="relative z-10">
+                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-2">{language === Language.EN ? 'Total Repayment' : 'Iyonke emayihlawulwe'}</p>
+                          <p className="text-5xl font-black tracking-tighter leading-none mb-6">R {calcResults.total.toLocaleString()}</p>
+                          
+                          <div className="grid grid-cols-2 gap-4 mt-10">
+                            <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                               <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Interest</p>
+                               <p className="text-xl font-black text-indigo-400">R {calcResults.interestAmount.toLocaleString()}</p>
+                            </div>
+                            <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                               <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Installments</p>
+                               <p className="text-xl font-black text-white">{calcResults.numInstallments}x</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="relative z-10 pt-8 border-t border-white/10 mt-8 flex items-center justify-between">
+                          <div>
+                            <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Installment Amount</p>
+                            <p className="text-2xl font-black text-indigo-400">R {calcResults.perInstallment.toLocaleString()}</p>
+                          </div>
+                          <div className="p-3 bg-indigo-600 rounded-xl shadow-lg rotate-3">
+                            <ArrowRight size={20} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'settings' && userRole === UserRole.LENDER && (
+              <div className="max-w-4xl mx-auto space-y-10 animate-in slide-in-from-bottom-8 duration-700">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg"><Settings size={32} /></div>
+                  <div>
+                    <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">System Motifs</h2>
+                    <p className="text-gray-500 font-medium">Configure operational triggers and communication alerts.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-12">
+                   {/* Automation Section */}
+                   <section className="space-y-6">
+                      <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
+                        <Zap size={16} className="text-indigo-600" />
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Operational Automation</h3>
+                      </div>
+                      <div className="grid grid-cols-1 gap-4">
+                        <SettingRow 
+                          title={t.prefOverdueAlerts} 
+                          description={t.prefOverdueDesc} 
+                          icon={AlertCircle} 
+                          active={settings.overdueAlerts} 
+                          onToggle={() => toggleSetting('overdueAlerts')} 
+                        />
+                        <SettingRow 
+                          title={t.prefSMSAuto} 
+                          description={t.prefSMSDesc} 
+                          icon={Smartphone} 
+                          active={settings.whatsappAutomation} 
+                          onToggle={() => toggleSetting('whatsappAutomation')} 
+                        />
+                      </div>
+                   </section>
+
+                   {/* Email Section */}
+                   <section className="space-y-6">
+                      <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
+                        <Mail size={16} className="text-indigo-600" />
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Communication Protocols</h3>
+                      </div>
+                      <div className="grid grid-cols-1 gap-4">
+                        <SettingRow 
+                          title={t.prefReports} 
+                          description={t.prefReportsDesc} 
+                          icon={ReceiptText} 
+                          active={settings.emailReports} 
+                          onToggle={() => toggleSetting('emailReports')} 
+                        />
+                        <SettingRow 
+                          title={t.prefEmailNewApp} 
+                          description={t.prefEmailNewAppDesc} 
+                          icon={MailIcon} 
+                          active={settings.emailNewAppAlerts} 
+                          onToggle={() => toggleSetting('emailNewAppAlerts')} 
+                        />
+                        <SettingRow 
+                          title={t.prefEmailOverdue} 
+                          description={t.prefEmailOverdueDesc} 
+                          icon={AlertTriangle} 
+                          active={settings.emailOverdueAlerts} 
+                          onToggle={() => toggleSetting('emailOverdueAlerts')} 
+                        />
+                      </div>
+                   </section>
+
+                   {/* Region Section */}
+                   <section className="space-y-6">
+                      <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
+                        <Globe size={16} className="text-indigo-600" />
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Regional Preferences</h3>
+                      </div>
+                      <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center justify-between">
+                        <div className="flex items-start gap-5">
+                          <div className="p-3 rounded-2xl bg-indigo-50 text-indigo-600">
+                             <Languages size={20} />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">Active Dialect</h4>
+                            <p className="text-[11px] text-gray-500 font-medium">Current primary interface language for all users.</p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => setLanguage(language === Language.EN ? Language.XH : Language.EN)}
+                          className="px-6 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-xl font-black text-[10px] uppercase tracking-widest text-indigo-600 transition-all"
+                        >
+                          {language === Language.EN ? 'Switch to isiXhosa' : 'Tshintshela kwi-English'}
+                        </button>
+                      </div>
+                   </section>
+                </div>
               </div>
             )}
           </div>

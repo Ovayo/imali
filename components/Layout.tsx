@@ -1,4 +1,3 @@
-
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { Menu, Wallet, Users, LayoutDashboard, Settings, Bell, Languages, Calculator, ArrowLeftRight, UserCheck, ShieldCheck, X, RefreshCw, Loader2, LogOut } from 'lucide-react';
@@ -245,7 +244,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
               <h2 className="text-3xl font-black text-gray-900 tracking-tight uppercase truncate">
                 {activeTab === 'dashboard' && (userRole === UserRole.LENDER 
                   ? `${getGreeting()}, ${t.dashboard}` 
-                  : `${getGreeting()}, ${displayUserName.split(' ')[0]} 😊`)}
+                  : `${getGreeting()}, ${displayUserName.split(' ').filter(Boolean).pop()} 😊`)}
                 {activeTab === 'loans' && (userRole === UserRole.LENDER ? t.loans : 'My Active Loans')}
                 {activeTab === 'borrowers' && t.borrowers}
                 {activeTab === 'calculator' && t.loanCalculator}
