@@ -578,7 +578,7 @@ const App: React.FC = () => {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mt-6 md:mt-8">
                     <div 
                       className="p-6 md:p-10 rounded-[2.5rem] md:rounded-[48px] text-white shadow-2xl relative overflow-hidden group min-h-[460px] md:min-h-[520px] flex flex-col justify-between transition-all duration-700 bg-cover bg-center"
-                      style={{ backgroundImage: `url('${cityBackground}')` }}
+                      style={{ backgroundImage: "url('https://westharlem.art/wp-content/uploads/2021/02/gum-front-page-website-2.jpg')" }}
                     >
                       <div className={`absolute inset-0 ${weather.overlay} backdrop-blur-[1px] transition-colors duration-700`} />
                       
