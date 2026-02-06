@@ -1,3 +1,4 @@
+
 import * as React from 'react';
 import { useState, useMemo, useEffect } from 'react';
 import Layout from './components/Layout';
@@ -11,7 +12,7 @@ import {
   Key, Lock, UserCircle, ReceiptText, Zap, AlertTriangle,
   Shield, Users, BarChart3, Send, Info as InfoIcon, Sun, Cloud, CloudRain, Thermometer, Wind, Droplets,
   Calendar, Percent, Scale, Calculator, Settings, RefreshCw, Trash2, Home, Mail as MailIcon, Phone, Clock, LogIn,
-  Waves, Gauge, Star, ShieldAlert, UserPlus
+  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation
 } from 'lucide-react';
 import { 
   DEFAULT_INTEREST_RATE, 
@@ -22,7 +23,6 @@ import {
 
 const LENDER_PASSWORD = 'imali-admin';
 
-// Eastern Cape City Image Mapping
 const CITY_IMAGES: Record<string, string> = {
   'East London': 'https://images.unsplash.com/photo-1549405626-ec49a7442168?q=80&w=2000&auto=format&fit=crop',
   'Gqeberha': 'https://images.unsplash.com/photo-1571401138243-98282367d344?q=80&w=2000&auto=format&fit=crop',
@@ -55,7 +55,6 @@ const App: React.FC = () => {
   const [language, setLanguage] = useState<Language>(Language.EN);
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Security States
   const [userRole, setUserRole] = useState<UserRole>(UserRole.BORROWER); 
   const [isLenderAuthenticated, setIsLenderAuthenticated] = useState(false);
   const [lenderPassInput, setLenderPassInput] = useState('');
@@ -67,16 +66,16 @@ const App: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RepaymentStatus | 'All'>('All');
 
-  // Auth Form State for Borrowers
+  // Geolocation State
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [loginId, setLoginId] = useState('');
   const [regForm, setRegForm] = useState({ name: '', id: '', phone: '', address: '' });
   
-  // Simulated Weather State
   const [currentWeather, setCurrentWeather] = useState<keyof typeof WEATHER_THEMES>('sunny');
   const weather = WEATHER_THEMES[currentWeather];
-
-  const LENDER_EMAIL = 'montiovayo@gmail.com';
 
   const [loans, setLoans] = useState<Loan[]>(() => {
     const saved = localStorage.getItem('imali_loans_v1');
@@ -93,12 +92,8 @@ const App: React.FC = () => {
   }, [extraProfiles]);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditBorrowerModalOpen, setIsEditBorrowerModalOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null);
-  const [editingBorrower, setEditingBorrower] = useState<{ idNumber: string, name: string, address: string, phone: string, email: string } | null>(null);
-  
-  const [isSendingReport, setIsSendingReport] = useState(false);
   const [isSendingNotifications, setIsSendingNotifications] = useState(false);
 
   const handleSendNotifications = () => {
@@ -112,49 +107,46 @@ const App: React.FC = () => {
 
   const t = TRANSLATIONS[language];
 
-  // Advanced Calculator Logic
-  const [calcAmount, setCalcAmount] = useState<number>(2500);
-  const [calcInterest, setCalcInterest] = useState<number>(30);
-  const [calcWeeks, setCalcWeeks] = useState<number>(4);
-  const [calcFrequency, setCalcFrequency] = useState<'weekly' | 'fortnightly' | 'monthly'>('weekly');
+  // Geolocation Effect
+  useEffect(() => {
+    if ("geolocation" in navigator && loggedInBorrowerId) {
+      setIsLocating(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+          setIsLocating(false);
+          // Small chance to change weather based on time or random for realism
+          const variants: (keyof typeof WEATHER_THEMES)[] = ['sunny', 'cloudy', 'rainy'];
+          setCurrentWeather(variants[Math.floor(Math.random() * variants.length)]);
+        },
+        (error) => {
+          console.warn("Geolocation denied or unavailable:", error);
+          setIsLocating(false);
+        }
+      );
+    }
+  }, [loggedInBorrowerId]);
+
+  const calcAmount = 2500;
+  const calcInterest = 30;
+  const calcWeeks = 4;
+  const calcFrequency = 'weekly';
 
   const calcResults = useMemo(() => {
     const interest = Math.round(calcAmount * (calcInterest / 100));
     const total = calcAmount + interest;
-    let numInstallments = 1;
+    let numInstallments = calcWeeks;
     let daysStep = 7;
-    
-    if (calcFrequency === 'weekly') { numInstallments = calcWeeks; daysStep = 7; }
-    else if (calcFrequency === 'fortnightly') { numInstallments = Math.max(1, Math.floor(calcWeeks / 2)); daysStep = 14; }
-    else { numInstallments = Math.max(1, Math.floor(calcWeeks / 4)); daysStep = 30; }
-
     const perInstallment = Math.round(total / numInstallments);
-    const schedule = Array.from({ length: numInstallments }).map((_, i) => {
-      const date = new Date();
-      date.setDate(date.getDate() + (i + 1) * daysStep);
-      return { installment: i + 1, date: date.toISOString().split('T')[0], amount: perInstallment };
-    });
-
-    return { interest, total, perInstallment, numInstallments, schedule, pieData: [
-      { name: 'Principal', value: calcAmount, color: '#1a1a1a' },
-      { name: 'Interest', value: interest, color: '#4f46e5' }
-    ]};
+    return { interest, total, perInstallment, numInstallments };
   }, [calcAmount, calcInterest, calcWeeks, calcFrequency]);
 
   useEffect(() => {
-    const steps = [
-      { t: "Synchronizing community ledger...", x: "Ukuhambelanisa iirekhodi..." },
-      { t: "Securing financial vault...", x: "Ukhuseleko lweakhawunti..." },
-      { t: "Applying Ubuntu motifs...", x: "Ukulungisa i-imali hub..." }
-    ];
-    const stepInterval = setInterval(() => {
-      setLoadingStep(prev => (prev < steps.length - 1 ? prev + 1 : prev));
-    }, 800);
-    const timer = setTimeout(() => {
-      setAppLoading(false);
-      clearInterval(stepInterval);
-    }, 2800);
-    return () => { clearTimeout(timer); clearInterval(stepInterval); };
+    const timer = setTimeout(() => { setAppLoading(false); }, 2800);
+    return () => { clearTimeout(timer); };
   }, []);
 
   useEffect(() => {
@@ -175,20 +167,10 @@ const App: React.FC = () => {
   const calculateCreditScore = (borrowerLoans: Loan[]) => {
     let score = 600;
     borrowerLoans.forEach(l => {
-      if (l.status === RepaymentStatus.PAID) {
-        score += 45;
-        const payDate = l.history.find(h => h.action.includes('Full Repayment Received'))?.date;
-        if (payDate && new Date(payDate) <= new Date(l.dueDate)) score += 15;
-      }
+      if (l.status === RepaymentStatus.PAID) score += 45;
       if (l.status === RepaymentStatus.OVERDUE) score -= 90;
       if (l.status === RepaymentStatus.DEFAULTED) score -= 250;
-      if (l.status === RepaymentStatus.PENDING) {
-        if (new Date(l.dueDate) > new Date()) score += 5;
-      }
     });
-    const completed = borrowerLoans.filter(l => l.status === RepaymentStatus.PAID).length;
-    if (completed >= 3) score += 40;
-    if (completed >= 10) score += 60;
     return Math.min(850, Math.max(300, score));
   };
 
@@ -341,20 +323,14 @@ const App: React.FC = () => {
     setIsLenderAuthenticated(false);
     setUserRole(UserRole.BORROWER);
     setActiveTab('dashboard');
+    setUserLocation(null);
   };
 
   const toggleRole = () => {
     if (userRole === UserRole.BORROWER) {
-      // Trying to access Lender
-      if (!isLenderAuthenticated) {
-        setUserRole(UserRole.LENDER); // Trigger Lender login view
-      } else {
-        setUserRole(UserRole.LENDER);
-      }
-    } else {
-      // Switching to Borrower
-      handleLogout();
-    }
+      if (!isLenderAuthenticated) { setUserRole(UserRole.LENDER); }
+      else { setUserRole(UserRole.LENDER); }
+    } else { handleLogout(); }
   };
 
   const StatusDot = ({ status, showLabel = false }: { status: RepaymentStatus, showLabel?: boolean }) => {
@@ -398,7 +374,6 @@ const App: React.FC = () => {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
-      {/* SECURITY GATE: Lender Portal Authentication */}
       {userRole === UserRole.LENDER && !isLenderAuthenticated ? (
         <div className="fixed inset-0 z-[300] bg-gray-950 flex items-center justify-center p-6 overflow-hidden">
           <div className="absolute inset-0 opacity-[0.05] xhosa-pattern scale-150 rotate-45" />
@@ -442,7 +417,6 @@ const App: React.FC = () => {
           </div>
         </div>
       ) : userRole === UserRole.BORROWER && !loggedInBorrowerId ? (
-        /* SECURITY GATE: Borrower Authentication */
         <div className="fixed inset-0 z-[200] bg-[#1a1a1a] flex items-center justify-center p-6 overflow-hidden">
            <div className="absolute inset-0 opacity-[0.03] xhosa-pattern scale-150 rotate-12" />
            <div className="max-w-xl w-full bg-white rounded-[2.5rem] md:rounded-[40px] shadow-2xl relative animate-in fade-in zoom-in duration-500 overflow-hidden flex flex-col">
@@ -465,88 +439,43 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="flex bg-gray-50 p-1 rounded-2xl mb-8 border border-gray-100">
-                  <button 
-                    onClick={() => setAuthMode('login')}
-                    className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${authMode === 'login' ? 'bg-white shadow-md text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
-                  >
-                    <LogIn size={14} /> {language === Language.XH ? 'Ngena' : 'Login'}
-                  </button>
-                  <button 
-                    onClick={() => setAuthMode('register')}
-                    className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${authMode === 'register' ? 'bg-white shadow-md text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
-                  >
-                    <UserPlus size={14} /> {language === Language.XH ? 'Bhalisa' : 'Join Community'}
-                  </button>
+                  <button onClick={() => setAuthMode('login')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${authMode === 'login' ? 'bg-white shadow-md text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><LogIn size={14} /> {language === Language.XH ? 'Ngena' : 'Login'}</button>
+                  <button onClick={() => setAuthMode('register')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${authMode === 'register' ? 'bg-white shadow-md text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><UserPlus size={14} /> {language === Language.XH ? 'Bhalisa' : 'Join Community'}</button>
                 </div>
 
                 {authMode === 'login' ? (
                   <form onSubmit={handleLogin} className="space-y-6">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">
-                        {language === Language.XH ? 'Inombolo ye-ID' : 'ID Number'}
-                      </label>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">{language === Language.XH ? 'Inombolo ye-ID' : 'ID Number'}</label>
                       <div className="relative group">
                         <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
-                        <input 
-                          required
-                          value={loginId}
-                          onChange={e => setLoginId(e.target.value)}
-                          placeholder="e.g. 9201010001081"
-                          className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-4 font-black text-sm tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner text-gray-900"
-                        />
+                        <input required value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="e.g. 9201010001081" className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-4 font-black text-sm tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner text-gray-900" />
                       </div>
                     </div>
-                    <button type="submit" className="w-full py-5 bg-[#1a1a1a] text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-3">
-                      <span>Secure Access</span>
-                      <ArrowRight size={18} />
-                    </button>
+                    <button type="submit" className="w-full py-5 bg-[#1a1a1a] text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-3"><span>Secure Access</span><ArrowRight size={18} /></button>
                   </form>
                 ) : (
                   <form onSubmit={handleRegister} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Full Name</label>
-                        <input required value={regForm.name} onChange={e => setRegForm({...regForm, name: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">ID Number</label>
-                        <input required value={regForm.id} onChange={e => setRegForm({...regForm, id: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" />
-                      </div>
+                      <div className="space-y-1"><label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Full Name</label><input required value={regForm.name} onChange={e => setRegForm({...regForm, name: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                      <div className="space-y-1"><label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">ID Number</label><input required value={regForm.id} onChange={e => setRegForm({...regForm, id: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Mobile Number</label>
-                      <input required value={regForm.phone} onChange={e => setRegForm({...regForm, phone: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Physical Address</label>
-                      <input required value={regForm.address} onChange={e => setRegForm({...regForm, address: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" />
-                    </div>
-                    <button type="submit" className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 mt-2">
-                      <span>Create Profile</span>
-                      <ShieldCheck size={18} />
-                    </button>
+                    <div className="space-y-1"><label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Mobile Number</label><input required value={regForm.phone} onChange={e => setRegForm({...regForm, phone: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                    <div className="space-y-1"><label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Physical Address</label><input required value={regForm.address} onChange={e => setRegForm({...regForm, address: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                    <button type="submit" className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 mt-2"><span>Create Profile</span><ShieldCheck size={18} /></button>
                   </form>
                 )}
 
-                <button 
-                  onClick={() => setUserRole(UserRole.LENDER)}
-                  className="w-full py-6 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 transition-colors"
-                >
-                  {language === Language.XH ? 'Ulawulo lwe-Admin (Lender)' : 'Lender Admin Access'}
-                </button>
+                <button onClick={() => setUserRole(UserRole.LENDER)} className="w-full py-6 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 transition-colors">{language === Language.XH ? 'Ulawulo lwe-Admin (Lender)' : 'Lender Admin Access'}</button>
               </div>
            </div>
         </div>
       ) : (
         <Layout 
-          activeTab={activeTab} 
-          setActiveTab={setActiveTab} 
-          language={language} 
-          setLanguage={setLanguage} 
-          userRole={userRole} 
-          toggleRole={toggleRole} 
-          onRefresh={handleRefresh}
-          userName={currentBorrowerAccount?.name}
+          activeTab={activeTab} setActiveTab={setActiveTab} 
+          language={language} setLanguage={setLanguage} 
+          userRole={userRole} toggleRole={toggleRole} 
+          onRefresh={handleRefresh} userName={currentBorrowerAccount?.name}
           overdueCount={stats.overdueCount}
         >
           {showToast && (
@@ -563,14 +492,7 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                   <SummaryCard title={userRole === UserRole.LENDER ? t.totalLoaned : "My Total Borrowed"} value={`R ${stats.totalLoaned.toLocaleString()}`} icon={Wallet} colorClass="bg-indigo-50 text-indigo-600" />
                   <SummaryCard title={userRole === UserRole.LENDER ? t.repaymentRate : "My Repayment Rate"} value={`${stats.repaymentRate.toFixed(1)}%`} icon={TrendingUp} colorClass="bg-emerald-50 text-emerald-600" />
-                  <SummaryCard 
-                    title={userRole === UserRole.LENDER ? t.overdue : "Pending Dues"} 
-                    value={stats.overdueCount} 
-                    icon={AlertCircle} 
-                    colorClass="bg-rose-50 text-rose-600"
-                    isUrgent={stats.overdueCount > 0}
-                    action={userRole === UserRole.LENDER && stats.overdueCount > 0 ? () => handleSendNotifications() : null}
-                  />
+                  <SummaryCard title={userRole === UserRole.LENDER ? t.overdue : "Pending Dues"} value={stats.overdueCount} icon={AlertCircle} colorClass="bg-rose-50 text-rose-600" isUrgent={stats.overdueCount > 0} action={userRole === UserRole.LENDER && stats.overdueCount > 0 ? () => handleSendNotifications() : null} />
                   <SummaryCard title={userRole === UserRole.LENDER ? (language === Language.EN ? 'Network Trust' : 'Intembeko') : "My Trust Score"} value={stats.score} icon={userRole === UserRole.LENDER ? Users : Zap} colorClass="bg-indigo-50 text-indigo-600" />
                 </div>
 
@@ -584,9 +506,20 @@ const App: React.FC = () => {
                       
                       <div className="relative z-10 flex flex-col gap-6">
                         <div className="flex items-center justify-between">
-                          <div className="px-4 py-2 bg-black/30 backdrop-blur-xl rounded-full text-[10px] font-black uppercase tracking-[0.2em] border border-white/20 shadow-lg flex items-center gap-2.5">
-                            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                            <MapPin size={10} className="text-white/80" /> {currentBorrowerCity}
+                          <div className="px-4 py-2 bg-black/30 backdrop-blur-xl rounded-full text-[10px] font-black uppercase tracking-[0.2em] border border-white/20 shadow-lg flex items-center gap-2.5 overflow-hidden">
+                            {userLocation ? (
+                              <>
+                                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                                <Navigation size={10} className="text-white/80" /> 
+                                <span className="truncate max-w-[120px]">Live: {userLocation.lat.toFixed(2)}, {userLocation.lng.toFixed(2)}</span>
+                              </>
+                            ) : (
+                              <>
+                                <div className={`w-2 h-2 rounded-full ${isLocating ? 'bg-amber-400 animate-spin' : 'bg-gray-400'}`} />
+                                <MapPin size={10} className="text-white/80" /> 
+                                {isLocating ? 'Locating...' : currentBorrowerCity}
+                              </>
+                            )}
                           </div>
                         </div>
 
@@ -622,15 +555,11 @@ const App: React.FC = () => {
                     <div className="bg-white p-6 md:p-10 rounded-[2.5rem] md:rounded-[48px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card flex flex-col justify-between">
                       <div className="relative z-10">
                          <div className="flex items-center justify-between mb-8">
-                           <div className="w-16 h-16 md:w-20 md:h-20 rounded-3xl bg-[#1a1a1a] flex items-center justify-center text-white shadow-2xl rotate-3">
-                             <UserCircle size={32} className="md:w-10 h-10" />
-                           </div>
+                           <div className="w-16 h-16 md:w-20 md:h-20 rounded-3xl bg-[#1a1a1a] flex items-center justify-center text-white shadow-2xl rotate-3"><UserCircle size={32} className="md:w-10 h-10" /></div>
                            <div className="text-right">
                               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Rating</p>
                               {currentBorrowerAccount && (
-                                <div className={`px-4 py-1.5 ${getScoreRating(currentBorrowerAccount.score).bg} ${getScoreRating(currentBorrowerAccount.score).color} rounded-full text-[10px] font-black uppercase tracking-widest border ${getScoreRating(currentBorrowerAccount.score).border}`}>
-                                  {getScoreRating(currentBorrowerAccount.score).label} ({getScoreRating(currentBorrowerAccount.score).rating})
-                                </div>
+                                <div className={`px-4 py-1.5 ${getScoreRating(currentBorrowerAccount.score).bg} ${getScoreRating(currentBorrowerAccount.score).color} rounded-full text-[10px] font-black uppercase tracking-widest border ${getScoreRating(currentBorrowerAccount.score).border}`}>{getScoreRating(currentBorrowerAccount.score).label} ({getScoreRating(currentBorrowerAccount.score).rating})</div>
                               )}
                            </div>
                          </div>
@@ -678,9 +607,7 @@ const App: React.FC = () => {
                      <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder={t.search} className="w-full pl-12 pr-6 py-3 bg-white border-none rounded-xl md:rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all text-sm font-medium shadow-sm text-gray-900" />
                    </div>
                    <div className="flex flex-wrap gap-2">
-                     <button onClick={() => setIsAddModalOpen(true)} className="flex-1 md:flex-none bg-[#1a1a1a] text-white px-6 md:px-8 py-3 rounded-xl md:rounded-2xl font-black text-xs md:text-sm uppercase tracking-widest shadow-xl hover:bg-black active:scale-95 transition-all flex items-center justify-center gap-2">
-                       <Plus size={18} /> {userRole === UserRole.LENDER ? 'New Account' : 'Request Loan'}
-                     </button>
+                     <button onClick={() => setIsAddModalOpen(true)} className="flex-1 md:flex-none bg-[#1a1a1a] text-white px-6 md:px-8 py-3 rounded-xl md:rounded-2xl font-black text-xs md:text-sm uppercase tracking-widest shadow-xl hover:bg-black active:scale-95 transition-all flex items-center justify-center gap-2"><Plus size={18} /> {userRole === UserRole.LENDER ? 'New Account' : 'Request Loan'}</button>
                    </div>
                 </div>
                 
@@ -688,17 +615,11 @@ const App: React.FC = () => {
                   {filteredAndSortedLoans.map((loan) => (
                     <div key={loan.id} className="p-6 active:bg-gray-50 transition-colors flex justify-between items-center group">
                       <div onClick={() => setSelectedLoan(loan)} className="space-y-2 flex-1 cursor-pointer">
-                        <div className="flex items-center gap-2">
-                          <div className="bg-indigo-600 text-white text-[8px] font-black px-2 py-0.5 rounded shadow-sm">{loan.id}</div>
-                          <StatusDot status={loan.status} />
-                        </div>
+                        <div className="flex items-center gap-2"><div className="bg-indigo-600 text-white text-[8px] font-black px-2 py-0.5 rounded shadow-sm">{loan.id}</div><StatusDot status={loan.status} /></div>
                         <p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p>
                         <p className="text-[10px] font-bold text-gray-400 font-mono">DUE: {loan.dueDate}</p>
                       </div>
-                      <div className="text-right flex flex-col items-end gap-2">
-                        <p className="text-sm font-black text-gray-900">R {loan.amountLoaned.toLocaleString()}</p>
-                        <ChevronRight onClick={() => setSelectedLoan(loan)} size={16} className="text-gray-300 group-active:text-indigo-600 cursor-pointer" />
-                      </div>
+                      <div className="text-right flex flex-col items-end gap-2"><p className="text-sm font-black text-gray-900">R {loan.amountLoaned.toLocaleString()}</p><ChevronRight onClick={() => setSelectedLoan(loan)} size={16} className="text-gray-300 group-active:text-indigo-600 cursor-pointer" /></div>
                     </div>
                   ))}
                 </div>
@@ -706,15 +627,7 @@ const App: React.FC = () => {
                 <div className="hidden md:block overflow-x-auto relative z-10 custom-scrollbar">
                   <table className="w-full text-left">
                     <thead className="bg-gray-50/50 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">
-                      <tr>
-                        <th className="px-8 py-5">Transaction ID</th>
-                        <th className="px-8 py-5">Borrower Name</th>
-                        <th className="px-8 py-5">Amount Loaned</th>
-                        <th className="px-8 py-5">Due Date</th>
-                        <th className="px-8 py-5">Total Amount Due</th>
-                        <th className="px-8 py-5">Status</th>
-                        <th className="px-8 py-5 text-center">Action</th>
-                      </tr>
+                      <tr><th className="px-8 py-5">Transaction ID</th><th className="px-8 py-5">Borrower Name</th><th className="px-8 py-5">Amount Loaned</th><th className="px-8 py-5">Due Date</th><th className="px-8 py-5">Total Amount Due</th><th className="px-8 py-5">Status</th><th className="px-8 py-5 text-center">Action</th></tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {filteredAndSortedLoans.map((loan) => (
@@ -747,11 +660,7 @@ const App: React.FC = () => {
                     <div key={borrower.idNumber} className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card group hover:shadow-md transition-all">
                       <div className="flex items-start justify-between mb-6 md:mb-8 relative z-10">
                         <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-[24px] bg-indigo-600 flex items-center justify-center font-black text-lg md:text-xl text-white shadow-lg">{borrower.name[0]}</div>
-                        <div className="flex flex-col items-end gap-2">
-                          <div className={`px-4 py-2 rounded-2xl border font-black text-[12px] flex items-center gap-2 shadow-sm ${rating.bg} ${rating.color} ${rating.border} scale-110`}>
-                            <rating.icon size={14} /><span className="opacity-60 uppercase tracking-tighter">TRUST:</span><span className="text-base">{borrower.score}</span>
-                          </div>
-                        </div>
+                        <div className="flex flex-col items-end gap-2"><div className={`px-4 py-2 rounded-2xl border font-black text-[12px] flex items-center gap-2 shadow-sm ${rating.bg} ${rating.color} ${rating.border} scale-110`}><rating.icon size={14} /><span className="opacity-60 uppercase tracking-tighter">TRUST:</span><span className="text-base">{borrower.score}</span></div></div>
                       </div>
                       <div className="space-y-4 md:space-y-6 relative z-10">
                         <div><h4 className="text-lg md:text-xl font-black text-gray-900 tracking-tight leading-none">{borrower.name}</h4><div className={`${rating.bg} ${rating.color} px-2 py-0.5 rounded-lg text-[8px] font-black uppercase border ${rating.border} mt-1 inline-block`}>{rating.label} Member</div></div>
@@ -764,49 +673,10 @@ const App: React.FC = () => {
                 })}
               </div>
             )}
-
-            {activeTab === 'calculator' && (
-              <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8 duration-700">
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg"><Calculator size={32} /></div>
-                  <div><h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">Loan Planner</h2><p className="text-gray-500 font-medium">Financial growth projections for the community.</p></div>
-                </div>
-                <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100">
-                  <div className="space-y-6">
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-end"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t.principal}</label><span className="font-black text-2xl text-gray-900 font-mono">R {calcAmount.toLocaleString()}</span></div>
-                      <input type="range" min="200" max="25000" step="100" value={calcAmount} onChange={e => setCalcAmount(Number(e.target.value))} className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-10">
-                      <div className="bg-[#1a1a1a] p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
-                        <div className="absolute inset-0 xhosa-pattern-sm opacity-5 pointer-events-none" />
-                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-2">{language === Language.EN ? 'Total Repayment' : 'Iyonke emayihlawulwe'}</p>
-                        <p className="text-4xl font-black tracking-tighter leading-none mb-6">R {calcResults.total.toLocaleString()}</p>
-                        <div className="flex justify-between items-center pt-6 border-t border-white/10">
-                          <div><p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Installment</p><p className="text-xl font-black text-indigo-400">R {calcResults.perInstallment.toLocaleString()}</p></div>
-                          <div className="text-right"><p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Count</p><p className="text-xl font-black text-white">{calcResults.numInstallments}x</p></div>
-                        </div>
-                      </div>
-                      <div className="space-y-4 justify-center flex flex-col">
-                        <div className="p-6 bg-indigo-50/50 rounded-3xl border border-indigo-100 flex items-start gap-4">
-                          <InfoIcon size={20} className="text-indigo-600 shrink-0 mt-1" />
-                          <p className="text-xs text-indigo-900/70 font-medium leading-relaxed">
-                            {language === Language.EN 
-                              ? 'Repayment dates are projections based on today. Adjusting the frequency recalculated installments automatically.'
-                              : 'Imihla yeentlawulo luqikelelo olusekwe namhlanje. Ukutshintsha i-frequency kuhlaziya isixa semali ngokuzenzekelayo.'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </Layout>
       )}
 
-      {/* Loan Detail Modal */}
       {selectedLoan && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-gray-950/60 backdrop-blur-md" onClick={() => setSelectedLoan(null)} />
@@ -822,14 +692,11 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-6"><div className="w-20 h-20 rounded-3xl bg-gray-50 flex items-center justify-center text-indigo-600 border border-gray-100"><UserCircle size={48} /></div><div><h4 className="text-2xl font-black text-gray-900 leading-none mb-2">{selectedLoan.borrowerName}</h4><div className="flex flex-wrap items-center gap-4 text-[10px] text-gray-400 font-black uppercase tracking-widest"><span className="flex items-center gap-1"><Smartphone size={12} /> {selectedLoan.borrowerNumber}</span><span className="flex items-center gap-1"><Fingerprint size={12} /> {selectedLoan.idNumber}</span></div></div></div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4"><div className="bg-gray-50 p-5 rounded-3xl border border-gray-100"><p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{t.principal}</p><p className="text-lg font-black text-gray-900">R {selectedLoan.amountLoaned.toLocaleString()}</p></div><div className="bg-gray-50 p-5 rounded-3xl border border-gray-100"><p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{t.interest}</p><p className="text-lg font-black text-indigo-600">R {(selectedLoan.totalRepayment - selectedLoan.amountLoaned).toLocaleString()}</p></div><div className="bg-indigo-50 p-5 rounded-3xl border border-indigo-100 col-span-2 md:col-span-1 relative overflow-hidden"><p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">{t.totalDue}</p><p className="text-lg font-black text-indigo-600">R {(selectedLoan.totalRepayment + calculatePenaltyDetails(selectedLoan).penalty).toLocaleString()}</p></div></div>
              </div>
-             <div className="p-6 md:p-8 bg-gray-50/50 border-t border-gray-50 flex flex-wrap gap-4 justify-end">
-                <button onClick={() => setSelectedLoan(null)} className="w-full md:w-auto px-8 py-3.5 bg-[#1a1a1a] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black transition-all">Close Detail</button>
-             </div>
+             <div className="p-6 md:p-8 bg-gray-50/50 border-t border-gray-50 flex flex-wrap gap-4 justify-end"><button onClick={() => setSelectedLoan(null)} className="w-full md:w-auto px-8 py-3.5 bg-[#1a1a1a] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black transition-all">Close Detail</button></div>
           </div>
         </div>
       )}
 
-      {/* Borrower Profile Modal */}
       {selectedBorrower && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-gray-950/40 backdrop-blur-xl" onClick={() => setSelectedBorrowerId(null)} />
