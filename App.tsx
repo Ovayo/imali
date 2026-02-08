@@ -751,6 +751,12 @@ const App: React.FC = () => {
                         <div onClick={() => setSelectedLoan(loan)} className="space-y-2 flex-1 cursor-pointer">
                           <div className="flex items-center gap-2">
                             <div className="bg-indigo-600 text-white text-[8px] font-black px-2 py-0.5 rounded shadow-sm">{loan.id}</div>
+                            {penaltyInfo.penalty > 0 && (
+                              <div className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                              </div>
+                            )}
                             <StatusDot status={loan.status} hasPenalty={penaltyInfo.penalty > 0} />
                           </div>
                           <p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p>
@@ -789,8 +795,31 @@ const App: React.FC = () => {
                         const penaltyInfo = calculatePenaltyDetails(loan);
                         return (
                           <tr key={loan.id} className="hover:bg-gray-50/80 transition-all">
-                            <td className="px-8 py-6"><div className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-lg rotate-1 inline-block uppercase tracking-tighter border border-white/20">{loan.id}</div></td>
-                            <td className="px-8 py-6"><p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p></td>
+                            <td className="px-8 py-6">
+                              <div className="flex items-center gap-2">
+                                <div className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-lg rotate-1 inline-block uppercase tracking-tighter border border-white/20">
+                                  {loan.id}
+                                </div>
+                                {penaltyInfo.penalty > 0 && (
+                                  <div className="relative flex h-3 w-3" title="Penalty Active">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500 border border-white"></span>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-8 py-6">
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p>
+                                  {penaltyInfo.penalty > 0 && (
+                                    <span className="bg-amber-100 text-amber-600 text-[7px] font-black px-1 py-0.5 rounded flex items-center gap-0.5 uppercase tracking-tighter border border-amber-200">
+                                      <AlertTriangle size={8} /> Penalty
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
                             <td className="px-8 py-6"><p className="font-bold text-gray-500 text-xs font-mono">{loan.borrowerNumber}</p></td>
                             <td className="px-8 py-6"><p className="font-black text-gray-900 text-sm">R {loan.amountLoaned.toLocaleString()}</p></td>
                             <td className="px-8 py-6 text-xs font-bold text-gray-600">{loan.dueDate}</td>
