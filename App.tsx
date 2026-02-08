@@ -11,7 +11,7 @@ import {
   Key, Lock, UserCircle, ReceiptText, Zap, AlertTriangle,
   Shield, Users, BarChart3, Send, Info as InfoIcon, Sun, Cloud, CloudRain, Thermometer, Wind, Droplets,
   Calendar, Percent, Scale, Calculator, Settings, RefreshCw, Trash2, Home, Mail as MailIcon, Phone, Clock, LogIn,
-  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation, ToggleLeft, ToggleRight, Check, Globe, Languages, Building2, Briefcase
+  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation, ToggleLeft, ToggleRight, Check, Globe, Languages, Building2, Briefcase, ArrowUpRight, CalendarClock
 } from 'lucide-react';
 import { 
   DEFAULT_INTEREST_RATE, 
@@ -328,7 +328,30 @@ const App: React.FC = () => {
     const repaymentRate = relevantLoans.length > 0 ? (paidCount / relevantLoans.length) * 100 : 0;
     const overdueCount = relevantLoans.filter(l => l.status === RepaymentStatus.OVERDUE).length;
     const score = userRole === UserRole.BORROWER ? (currentBorrowerAccount?.score || 600) : new Set(relevantLoans.map(l => l.idNumber)).size;
-    return { totalLoaned, repaymentRate, overdueCount, score };
+    
+    // Profit Calculation (Realized + Projected)
+    const totalProfit = relevantLoans.reduce((acc, l) => {
+      const interest = l.totalRepayment - l.amountLoaned;
+      const penalty = calculatePenaltyDetails(l).penalty;
+      return acc + interest + penalty;
+    }, 0);
+
+    // Expected Inflow (Repayments due in the next 7 days)
+    const today = new Date();
+    const nextWeek = new Date();
+    nextWeek.setDate(today.getDate() + 7);
+
+    const expectedInflow = relevantLoans.reduce((acc, l) => {
+      if (l.status === RepaymentStatus.PAID) return acc;
+      const dueDate = new Date(l.dueDate);
+      if (dueDate >= today && dueDate <= nextWeek) {
+        const penalty = calculatePenaltyDetails(l).penalty;
+        return acc + l.totalRepayment + penalty;
+      }
+      return acc;
+    }, 0);
+
+    return { totalLoaned, repaymentRate, overdueCount, score, totalProfit, expectedInflow };
   }, [loans, userRole, loggedInBorrowerId, currentBorrowerAccount]);
 
   const chartData = useMemo(() => {
@@ -374,7 +397,7 @@ const App: React.FC = () => {
     }
   };
 
-  const StatusDot = ({ status, showLabel = false }: { status: RepaymentStatus, showLabel?: boolean }) => {
+  const StatusDot = ({ status, showLabel = false, hasPenalty = false }: { status: RepaymentStatus, showLabel?: boolean, hasPenalty?: boolean }) => {
     const configs = {
       [RepaymentStatus.PAID]: { color: 'bg-emerald-500 ring-emerald-100', text: language === Language.XH ? 'Ihlawulwe' : 'Paid' },
       [RepaymentStatus.OVERDUE]: { color: 'bg-rose-500 ring-rose-100 animate-pulse', text: language === Language.XH ? 'Idlulile' : 'Overdue' },
@@ -384,19 +407,36 @@ const App: React.FC = () => {
     const current = configs[status];
     return (
       <div className="flex items-center gap-2">
-        <div className={`w-3.5 h-3.5 rounded-full ${current.color} ring-4`} />
-        {showLabel && <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">{current.text}</span>}
+        <div className="relative">
+          <div className={`w-3.5 h-3.5 rounded-full ${current.color} ring-4`} />
+          {hasPenalty && (
+            <div className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full border border-white animate-bounce" />
+          )}
+        </div>
+        {showLabel && (
+           <div className="flex items-center gap-1.5">
+             <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">{current.text}</span>
+             {hasPenalty && (
+               <span className="bg-amber-100 text-amber-600 text-[8px] font-black px-1.5 py-0.5 rounded uppercase flex items-center gap-0.5 shadow-sm border border-amber-200">
+                 <AlertTriangle size={8} className="animate-pulse" /> Penalty
+               </span>
+             )}
+           </div>
+        )}
       </div>
     );
   };
 
-  const SummaryCard = ({ title, value, icon: Icon, colorClass, action, isUrgent }: any) => (
+  const SummaryCard = ({ title, value, icon: Icon, colorClass, action, isUrgent, secondaryValue }: any) => (
     <div className="bg-white p-5 md:p-6 rounded-[32px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card group h-full flex flex-col justify-between">
       <div className="absolute top-0 right-0 p-1 opacity-5 xhosa-pattern-sm" />
       <div className="flex items-start justify-between relative z-10">
         <div className="flex flex-col">
           <p className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1 ${isUrgent ? 'text-rose-600' : 'text-gray-400'}`}>{title}</p>
-          <p className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">{value}</p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">{value}</p>
+            {secondaryValue && <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{secondaryValue}</span>}
+          </div>
         </div>
         <div className={`p-2.5 rounded-xl ${colorClass} shrink-0`}><Icon size={18} /></div>
       </div>
@@ -511,8 +551,8 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="flex bg-gray-50 p-1 rounded-2xl mb-8 border border-gray-100">
-                  <button onClick={() => setAuthMode('login')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${authMode === 'login' ? 'bg-white shadow-md text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><LogIn size={14} /> {language === Language.XH ? 'Ngena' : 'Login'}</button>
-                  <button onClick={() => setAuthMode('register')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${authMode === 'register' ? 'bg-white shadow-md text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><UserPlus size={14} /> {language === Language.XH ? 'Bhalisa' : 'Join Community'}</button>
+                  <button onClick={() => setAuthMode('login')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${authMode === 'login' ? 'bg-white shadow-md text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><LogIn size={14} className="inline mr-2" /> {language === Language.XH ? 'Ngena' : 'Login'}</button>
+                  <button onClick={() => setAuthMode('register')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${authMode === 'register' ? 'bg-white shadow-md text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><UserPlus size={14} className="inline mr-2" /> {language === Language.XH ? 'Bhalisa' : 'Join Community'}</button>
                 </div>
 
                 {authMode === 'login' ? (
@@ -561,8 +601,28 @@ const App: React.FC = () => {
           <div className="space-y-6 md:space-y-8 pb-32 animate-in fade-in duration-500">
             {activeTab === 'dashboard' && (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6">
                   <SummaryCard title={userRole === UserRole.LENDER ? t.totalLoaned : "My Total Borrowed"} value={`R ${stats.totalLoaned.toLocaleString()}`} icon={Wallet} colorClass="bg-indigo-50 text-indigo-600" />
+                  
+                  {userRole === UserRole.LENDER && (
+                    <>
+                      <SummaryCard 
+                        title={language === Language.XH ? "Inzala iyonke" : "Total Profit"} 
+                        value={`R ${stats.totalProfit.toLocaleString()}`} 
+                        icon={ArrowUpRight} 
+                        colorClass="bg-emerald-50 text-emerald-600"
+                        secondaryValue="Expected"
+                      />
+                      <SummaryCard 
+                        title={language === Language.XH ? "Imali Engenayo (7 Days)" : "Expected Inflow"} 
+                        value={`R ${stats.expectedInflow.toLocaleString()}`} 
+                        icon={CalendarClock} 
+                        colorClass="bg-indigo-50 text-indigo-600"
+                        secondaryValue="Next 7 Days"
+                      />
+                    </>
+                  )}
+
                   <SummaryCard title={userRole === UserRole.LENDER ? t.repaymentRate : "My Repayment Rate"} value={`${stats.repaymentRate.toFixed(1)}%`} icon={TrendingUp} colorClass="bg-emerald-50 text-emerald-600" />
                   <SummaryCard title={userRole === UserRole.LENDER ? t.overdue : "Pending Dues"} value={stats.overdueCount} icon={AlertCircle} colorClass="bg-rose-50 text-rose-600" isUrgent={stats.overdueCount > 0} action={userRole === UserRole.LENDER && stats.overdueCount > 0 ? () => handleSendNotifications() : null} />
                   <SummaryCard title={userRole === UserRole.LENDER ? (language === Language.EN ? 'Network Trust' : 'Intembeko') : "My Trust Score"} value={stats.score} icon={userRole === UserRole.LENDER ? Users : Zap} colorClass="bg-indigo-50 text-indigo-600" />
@@ -684,16 +744,30 @@ const App: React.FC = () => {
                 </div>
                 
                 <div className="md:hidden divide-y divide-gray-50">
-                  {filteredAndSortedLoans.map((loan) => (
-                    <div key={loan.id} className="p-6 active:bg-gray-50 transition-colors flex justify-between items-center group">
-                      <div onClick={() => setSelectedLoan(loan)} className="space-y-2 flex-1 cursor-pointer">
-                        <div className="flex items-center gap-2"><div className="bg-indigo-600 text-white text-[8px] font-black px-2 py-0.5 rounded shadow-sm">{loan.id}</div><StatusDot status={loan.status} /></div>
-                        <p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p>
-                        <p className="text-[10px] font-bold text-gray-400 font-mono">DUE: {loan.dueDate}</p>
+                  {filteredAndSortedLoans.map((loan) => {
+                    const penaltyInfo = calculatePenaltyDetails(loan);
+                    return (
+                      <div key={loan.id} className="p-6 active:bg-gray-50 transition-colors flex justify-between items-center group">
+                        <div onClick={() => setSelectedLoan(loan)} className="space-y-2 flex-1 cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            <div className="bg-indigo-600 text-white text-[8px] font-black px-2 py-0.5 rounded shadow-sm">{loan.id}</div>
+                            <StatusDot status={loan.status} hasPenalty={penaltyInfo.penalty > 0} />
+                          </div>
+                          <p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p>
+                          <p className="text-[10px] font-bold text-gray-400 font-mono">DUE: {loan.dueDate}</p>
+                          <div className="mt-1 flex items-center gap-2">
+                             <p className="text-[10px] font-black text-indigo-600">TOTAL DUE: R {(loan.totalRepayment + penaltyInfo.penalty).toLocaleString()}</p>
+                             {penaltyInfo.penalty > 0 && (
+                               <span className="bg-amber-100 text-amber-600 text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-1">
+                                 <AlertTriangle size={8} /> Penalty Applied
+                               </span>
+                             )}
+                          </div>
+                        </div>
+                        <div className="text-right flex flex-col items-end gap-2"><p className="text-sm font-black text-gray-900">R {loan.amountLoaned.toLocaleString()}</p><ChevronRight onClick={() => setSelectedLoan(loan)} size={16} className="text-gray-300 group-active:text-indigo-600 cursor-pointer" /></div>
                       </div>
-                      <div className="text-right flex flex-col items-end gap-2"><p className="text-sm font-black text-gray-900">R {loan.amountLoaned.toLocaleString()}</p><ChevronRight onClick={() => setSelectedLoan(loan)} size={16} className="text-gray-300 group-active:text-indigo-600 cursor-pointer" /></div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="hidden md:block overflow-x-auto relative z-10 custom-scrollbar">
@@ -705,29 +779,47 @@ const App: React.FC = () => {
                         <th className="px-8 py-5">Borrower Number</th>
                         <th className="px-8 py-5">Amount Loaned</th>
                         <th className="px-8 py-5">Due Date</th>
-                        <th className="px-8 py-5">Total Amount Due</th>
+                        <th className="px-8 py-5 bg-indigo-50/50 text-indigo-600">Total Amount Due</th>
                         <th className="px-8 py-5">Status</th>
                         <th className="px-8 py-5 text-center">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {filteredAndSortedLoans.map((loan) => (
-                        <tr key={loan.id} className="hover:bg-gray-50/80 transition-all">
-                          <td className="px-8 py-6"><div className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-lg rotate-1 inline-block uppercase tracking-tighter border border-white/20">{loan.id}</div></td>
-                          <td className="px-8 py-6"><p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p></td>
-                          <td className="px-8 py-6"><p className="font-bold text-gray-500 text-xs font-mono">{loan.borrowerNumber}</p></td>
-                          <td className="px-8 py-6"><p className="font-black text-gray-900 text-sm">R {loan.amountLoaned.toLocaleString()}</p></td>
-                          <td className="px-8 py-6 text-xs font-bold text-gray-600">{loan.dueDate}</td>
-                          <td className="px-8 py-6"><p className="font-black text-indigo-600 font-mono text-sm">R {(loan.totalRepayment + calculatePenaltyDetails(loan).penalty).toLocaleString()}</p></td>
-                          <td className="px-8 py-6"><StatusDot status={loan.status} showLabel /></td>
-                          <td className="px-8 py-6 flex justify-center gap-2">
-                            <button onClick={() => setSelectedLoan(loan)} className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm"><Eye size={18} /></button>
-                            {userRole === UserRole.LENDER && loan.status !== RepaymentStatus.PAID && (
-                              <button onClick={() => handleMarkAsPaid(loan.id)} className="p-3 bg-white text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all border border-gray-100 shadow-sm"><CheckCircle2 size={18} /></button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                      {filteredAndSortedLoans.map((loan) => {
+                        const penaltyInfo = calculatePenaltyDetails(loan);
+                        return (
+                          <tr key={loan.id} className="hover:bg-gray-50/80 transition-all">
+                            <td className="px-8 py-6"><div className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-lg rotate-1 inline-block uppercase tracking-tighter border border-white/20">{loan.id}</div></td>
+                            <td className="px-8 py-6"><p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p></td>
+                            <td className="px-8 py-6"><p className="font-bold text-gray-500 text-xs font-mono">{loan.borrowerNumber}</p></td>
+                            <td className="px-8 py-6"><p className="font-black text-gray-900 text-sm">R {loan.amountLoaned.toLocaleString()}</p></td>
+                            <td className="px-8 py-6 text-xs font-bold text-gray-600">{loan.dueDate}</td>
+                            <td className="px-8 py-6 bg-indigo-50/30">
+                              <div className="flex flex-col">
+                                <p className="font-black text-indigo-700 font-mono text-base">R {(loan.totalRepayment + penaltyInfo.penalty).toLocaleString()}</p>
+                                {penaltyInfo.penalty > 0 ? (
+                                  <span className="text-[9px] font-black text-rose-500 uppercase tracking-tighter flex items-center gap-1">
+                                    <AlertTriangle size={8} /> R{loan.amountLoaned} + R{loan.totalRepayment - loan.amountLoaned} Int + R{penaltyInfo.penalty} Pen
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">
+                                    R{loan.amountLoaned} + R{loan.totalRepayment - loan.amountLoaned} Int
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-8 py-6">
+                              <StatusDot status={loan.status} showLabel hasPenalty={penaltyInfo.penalty > 0} />
+                            </td>
+                            <td className="px-8 py-6 flex justify-center gap-2">
+                              <button onClick={() => setSelectedLoan(loan)} className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm"><Eye size={18} /></button>
+                              {userRole === UserRole.LENDER && loan.status !== RepaymentStatus.PAID && (
+                                <button onClick={() => handleMarkAsPaid(loan.id)} className="p-3 bg-white text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all border border-gray-100 shadow-sm"><CheckCircle2 size={18} /></button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1021,9 +1113,51 @@ const App: React.FC = () => {
              </div>
              <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-8">
                 <div className="flex items-center gap-6"><div className="w-20 h-20 rounded-3xl bg-gray-50 flex items-center justify-center text-indigo-600 border border-gray-100"><UserCircle size={48} /></div><div><h4 className="text-2xl font-black text-gray-900 leading-none mb-2">{selectedLoan.borrowerName}</h4><div className="flex flex-wrap items-center gap-4 text-[10px] text-gray-400 font-black uppercase tracking-widest"><span className="flex items-center gap-1"><Smartphone size={12} /> {selectedLoan.borrowerNumber}</span><span className="flex items-center gap-1"><Fingerprint size={12} /> {selectedLoan.idNumber}</span></div></div></div>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4"><div className="bg-gray-50 p-5 rounded-3xl border border-gray-100"><p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{t.principal}</p><p className="text-lg font-black text-gray-900">R {selectedLoan.amountLoaned.toLocaleString()}</p></div><div className="bg-gray-50 p-5 rounded-3xl border border-gray-100"><p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{t.interest}</p><p className="text-lg font-black text-indigo-600">R {(selectedLoan.totalRepayment - selectedLoan.amountLoaned).toLocaleString()}</p></div><div className="bg-indigo-50 p-5 rounded-3xl border border-indigo-100 col-span-2 md:col-span-1 relative overflow-hidden"><p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">{t.totalDue}</p><p className="text-lg font-black text-indigo-600">R {(selectedLoan.totalRepayment + calculatePenaltyDetails(selectedLoan).penalty).toLocaleString()}</p></div></div>
+                
+                <div className="space-y-4">
+                  <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100 pb-2">Financial Breakdown</h5>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-gray-50 p-5 rounded-3xl border border-gray-100 flex flex-col justify-center">
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{t.principal}</p>
+                      <p className="text-lg font-black text-gray-900">R {selectedLoan.amountLoaned.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-gray-50 p-5 rounded-3xl border border-gray-100 flex flex-col justify-center">
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{t.interest}</p>
+                      <p className="text-lg font-black text-indigo-600">R {(selectedLoan.totalRepayment - selectedLoan.amountLoaned).toLocaleString()}</p>
+                    </div>
+                    {calculatePenaltyDetails(selectedLoan).penalty > 0 && (
+                      <div className="bg-rose-50 p-5 rounded-3xl border border-rose-100 flex flex-col justify-center relative overflow-hidden group">
+                        <div className="absolute -right-2 -top-2 opacity-5 group-hover:rotate-12 transition-transform"><AlertTriangle size={48} /></div>
+                        <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-1">Penalties</p>
+                        <p className="text-lg font-black text-rose-600">R {calculatePenaltyDetails(selectedLoan).penalty.toLocaleString()}</p>
+                        <p className="text-[8px] font-bold text-rose-400 uppercase mt-0.5">{calculatePenaltyDetails(selectedLoan).weeks} Weeks Overdue</p>
+                      </div>
+                    )}
+                    <div className={`p-5 rounded-3xl border flex flex-col justify-center relative overflow-hidden ${calculatePenaltyDetails(selectedLoan).penalty > 0 ? 'bg-indigo-600 text-white border-indigo-700 shadow-xl md:col-span-1 col-span-2' : 'bg-indigo-50 border-indigo-100 text-indigo-600 md:col-span-2 col-span-2'}`}>
+                      <div className="absolute inset-0 xhosa-pattern-sm opacity-[0.05]" />
+                      <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${calculatePenaltyDetails(selectedLoan).penalty > 0 ? 'text-indigo-200' : 'text-indigo-400'}`}>{t.totalDue}</p>
+                      <p className="text-2xl font-black font-mono">R {(selectedLoan.totalRepayment + calculatePenaltyDetails(selectedLoan).penalty).toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                   <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100 pb-2">Timeline Details</h5>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                         <Calendar size={18} className="text-indigo-600" />
+                         <div><p className="text-[8px] font-black text-gray-400 uppercase">Started</p><p className="text-xs font-black text-gray-700">{selectedLoan.startDate}</p></div>
+                      </div>
+                      <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                         <Clock size={18} className="text-indigo-600" />
+                         <div><p className="text-[8px] font-black text-gray-400 uppercase">Due Date</p><p className="text-xs font-black text-gray-700">{selectedLoan.dueDate}</p></div>
+                      </div>
+                   </div>
+                </div>
              </div>
-             <div className="p-6 md:p-8 bg-gray-50/50 border-t border-gray-50 flex flex-wrap gap-4 justify-end"><button onClick={() => setSelectedLoan(null)} className="w-full md:w-auto px-8 py-3.5 bg-[#1a1a1a] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black transition-all">Close Detail</button></div>
+             <div className="p-6 md:p-8 bg-gray-50/50 border-t border-gray-50 flex flex-wrap gap-4 justify-end">
+               <button onClick={() => setSelectedLoan(null)} className="w-full md:w-auto px-10 py-4 bg-[#1a1a1a] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black transition-all">Close Transaction Detail</button>
+             </div>
           </div>
         </div>
       )}
@@ -1036,16 +1170,90 @@ const App: React.FC = () => {
               <div className="absolute top-4 right-4"><button onClick={() => setSelectedBorrowerId(null)} className="p-2 bg-white/10 text-white hover:bg-white/20 rounded-full transition-all"><X size={24} /></button></div>
               <div className="flex items-center gap-6 translate-y-16">
                 <div className="w-24 h-24 md:w-36 md:h-36 rounded-[2.5rem] bg-indigo-600 flex items-center justify-center text-white text-4xl md:text-6xl font-black shadow-2xl border-4 border-white overflow-hidden relative group">{selectedBorrower.name[0]}</div>
-                <div className="mb-2"><h3 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight">{selectedBorrower.name}</h3><div className={`px-3 py-1 rounded-full ${getScoreRating(selectedBorrower.score).bg} ${getScoreRating(selectedBorrower.score).color} text-[10px] font-black uppercase tracking-widest border ${getScoreRating(selectedBorrower.score).border} mt-1 inline-block`}>Verified {getScoreRating(selectedBorrower.score).label} Member</div></div>
+                <div className="mb-2">
+                  <h3 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight leading-none">{selectedBorrower.name}</h3>
+                  <div className={`px-3 py-1 rounded-full ${getScoreRating(selectedBorrower.score).bg} ${getScoreRating(selectedBorrower.score).color} text-[10px] font-black uppercase tracking-widest border ${getScoreRating(selectedBorrower.score).border} mt-2 inline-block`}>Verified {getScoreRating(selectedBorrower.score).label} Member</div>
+                </div>
               </div>
             </div>
             <div className="pt-24 md:pt-32 p-6 md:p-12 overflow-y-auto custom-scrollbar">
+              
+              {/* Prominent Contact Bar */}
+              <div className="flex flex-wrap items-center gap-6 p-5 bg-gray-50 rounded-[32px] border border-gray-100 mb-10 shadow-sm relative overflow-hidden group">
+                <div className="absolute inset-0 xhosa-pattern-sm opacity-[0.03] pointer-events-none" />
+                <div className="flex items-center gap-3 relative z-10">
+                  <div className="p-3 bg-white rounded-2xl shadow-sm border border-gray-100 group-hover:scale-110 transition-transform">
+                    <Smartphone size={20} className="text-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Primary Mobile</p>
+                    <p className="text-base font-black text-gray-900 tracking-tight">{selectedBorrower.phone}</p>
+                  </div>
+                </div>
+                <div className="h-10 w-px bg-gray-200 hidden sm:block mx-2" />
+                <div className="flex items-center gap-3 relative z-10">
+                  <div className="p-3 bg-white rounded-2xl shadow-sm border border-gray-100 group-hover:scale-110 transition-transform">
+                    <MailIcon size={20} className="text-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Email Address</p>
+                    <p className="text-base font-black text-gray-900 tracking-tight lowercase">{selectedBorrower.email}</p>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-                <div className="space-y-6"><h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Contact Details</h4><div className="space-y-4"><div className="flex items-center gap-3 text-sm font-bold text-gray-600"><Smartphone size={16} className="text-indigo-600" /> {selectedBorrower.phone}</div><div className="flex items-center gap-3 text-sm font-bold text-gray-600"><Home size={16} className="text-indigo-600" /> {selectedBorrower.address}</div><div className="flex items-center gap-3 text-sm font-bold text-gray-600"><Fingerprint size={16} className="text-indigo-600" /> {selectedBorrower.idNumber}</div></div></div>
-                <div className="col-span-1 md:col-span-2 space-y-6"><h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Financial Motif</h4><div className="grid grid-cols-1 sm:grid-cols-2 gap-6"><div className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 relative overflow-hidden group"><div className={`absolute top-0 right-0 p-4 opacity-10 ${getScoreRating(selectedBorrower.score).color}`}><Zap size={48} fill="currentColor" /></div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Trust Score</p><div className="flex items-baseline gap-2"><p className={`text-5xl font-black ${getScoreRating(selectedBorrower.score).color}`}>{selectedBorrower.score}</p><p className="text-gray-400 text-sm font-bold">/ 850</p></div></div><div className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 flex flex-col justify-center"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Health</p><div className="space-y-4"><div className="flex justify-between items-center"><span className="text-sm font-bold text-gray-600">Total Loans</span><span className="text-xl font-black text-gray-900">{selectedBorrower.loans.length}</span></div><div className="flex justify-between items-center"><span className="text-sm font-bold text-rose-600">Overdue</span><span className="text-xl font-black text-rose-600">{selectedBorrower.loans.filter(l => l.status === RepaymentStatus.OVERDUE).length}</span></div></div></div></div></div>
+                <div className="space-y-6">
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100 pb-2">Verification Info</h4>
+                  <div className="space-y-5">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-indigo-50 rounded-xl"><Home size={18} className="text-indigo-600" /></div>
+                      <div>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Physical Address</p>
+                        <p className="text-xs font-bold text-gray-600 leading-relaxed">{selectedBorrower.address}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-indigo-50 rounded-xl"><Fingerprint size={18} className="text-indigo-600" /></div>
+                      <div>
+                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">National Identity</p>
+                        <p className="text-xs font-bold text-gray-600 font-mono tracking-wider">{selectedBorrower.idNumber}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="col-span-1 md:col-span-2 space-y-6">
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100 pb-2">Financial Motif</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 relative overflow-hidden group shadow-sm">
+                      <div className={`absolute top-0 right-0 p-4 opacity-10 ${getScoreRating(selectedBorrower.score).color}`}><Zap size={48} fill="currentColor" /></div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Trust Score</p>
+                      <div className="flex items-baseline gap-2">
+                        <p className={`text-5xl font-black ${getScoreRating(selectedBorrower.score).color}`}>{selectedBorrower.score}</p>
+                        <p className="text-gray-400 text-sm font-bold">/ 850</p>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 flex flex-col justify-center shadow-sm">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Account Health</p>
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center bg-white p-3 rounded-2xl border border-gray-100">
+                          <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Total Active</span>
+                          <span className="text-xl font-black text-gray-900">{selectedBorrower.loans.length}</span>
+                        </div>
+                        <div className="flex justify-between items-center bg-rose-50 p-3 rounded-2xl border border-rose-100">
+                          <span className="text-xs font-bold text-rose-600 uppercase tracking-widest">Overdue</span>
+                          <span className="text-xl font-black text-rose-600">{selectedBorrower.loans.filter(l => l.status === RepaymentStatus.OVERDUE).length}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="p-8 border-t border-gray-50 bg-gray-50/50 flex justify-end gap-4"><button onClick={() => setSelectedBorrowerId(null)} className="px-8 py-4 bg-white border border-gray-100 rounded-[20px] text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 transition-all">Close Detail</button></div>
+            <div className="p-8 border-t border-gray-50 bg-gray-50/50 flex justify-end gap-4">
+              <button onClick={() => setSelectedBorrowerId(null)} className="px-10 py-4 bg-white border border-gray-100 rounded-[24px] text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 hover:border-indigo-100 shadow-sm transition-all">Close Profile View</button>
+            </div>
           </div>
         </div>
       )}

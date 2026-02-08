@@ -129,6 +129,72 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
         </div>
       </header>
 
+      {/* Mobile Navigation Drawer */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-[100] md:hidden">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity animate-in fade-in duration-300"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          
+          {/* Drawer Content */}
+          <nav className="absolute top-0 left-0 bottom-0 w-4/5 max-w-xs bg-[#1a1a1a] text-white shadow-2xl flex flex-col animate-in slide-in-from-left duration-300">
+             <div className="absolute inset-0 opacity-[0.03] pointer-events-none xhosa-pattern rotate-45 scale-150" />
+             <div className="bead-accent w-full" />
+             
+             <div className="p-6 flex items-center justify-between border-b border-white/5 relative z-10">
+                <div className="flex items-center gap-2">
+                  <div className="bg-indigo-600 p-1.5 rounded shadow-lg">
+                     <Wallet size={20} />
+                  </div>
+                  <h1 className="text-xl font-black tracking-tighter uppercase">imali</h1>
+                </div>
+                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 hover:bg-white/10 rounded-xl border border-white/5">
+                  <X size={24} />
+                </button>
+             </div>
+
+             <div className="flex-1 overflow-y-auto p-6 space-y-2 relative z-10">
+                <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-4 pl-1">Navigation Hub</p>
+                {menuItems.map((item) => (
+                  <button 
+                    key={item.id} 
+                    onClick={() => handleMobileNav(item.id)}
+                    className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-200 active:scale-95 ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 border border-indigo-400/20' : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'}`}
+                  >
+                    <item.icon size={22} className={activeTab === item.id ? 'text-white' : 'text-indigo-400/60'} />
+                    <span className="font-black text-base uppercase tracking-widest">{item.label}</span>
+                  </button>
+                ))}
+             </div>
+             
+             <div className="p-6 border-t border-white/5 space-y-4 relative z-10 bg-black/20">
+                <button 
+                  onClick={() => { setLanguage(language === Language.EN ? Language.XH : Language.EN); setIsMobileMenuOpen(false); }}
+                  className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 text-gray-400 font-black uppercase text-[10px] tracking-widest border border-white/5"
+                >
+                  <div className="flex items-center gap-3">
+                    <Languages size={18} className="text-indigo-400" />
+                    {language === Language.EN ? 'isiXhosa Language' : 'English Language'}
+                  </div>
+                  <ArrowLeftRight size={14} />
+                </button>
+                
+                <div className="flex items-center gap-4 p-4 rounded-2xl bg-black/40 border border-white/5">
+                   <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center font-black text-xl text-white shadow-xl border border-white/10 rotate-3">
+                     {displayUserName[0]}
+                   </div>
+                   <div className="min-w-0">
+                     <p className="font-black text-sm uppercase tracking-tight text-white truncate">{displayUserName}</p>
+                     <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">{userRole === UserRole.LENDER ? 'System Admin' : 'Active Member'}</p>
+                   </div>
+                </div>
+             </div>
+          </nav>
+        </div>
+      )}
+
       {/* Sidebar (Desktop) */}
       <aside className="hidden md:flex flex-col w-72 bg-[#1a1a1a] text-white h-full sticky top-0 shadow-2xl relative overflow-hidden flex-shrink-0 min-w-0">
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none xhosa-pattern rotate-45 scale-150" />
