@@ -48,6 +48,10 @@ const App: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RepaymentStatus | 'All'>('All');
 
+  // Deletion Confirmation States
+  const [loanToDelete, setLoanToDelete] = useState<Loan | null>(null);
+  const [borrowerToDelete, setBorrowerToDelete] = useState<{ idNumber: string, name: string } | null>(null);
+
   // Geolocation & City State
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [detectedCity, setDetectedCity] = useState<string | null>(null);
@@ -308,6 +312,23 @@ const App: React.FC = () => {
       dueDate: '',
       payoutMethod: PayoutMethod.MOBILE
     });
+  };
+
+  const handleDeleteLoan = (loanId: string) => {
+    setLoans(prev => prev.filter(l => l.id !== loanId));
+    setLoanToDelete(null);
+    setShowToast(language === Language.XH ? 'I-Loan icinyiwe!' : 'Loan record deleted!');
+    setTimeout(() => setShowToast(null), 3000);
+  };
+
+  const handleDeleteBorrower = (idNumber: string) => {
+    // Remove from extra profiles
+    setExtraProfiles(prev => prev.filter(p => p.idNumber !== idNumber));
+    // Remove all associated loans
+    setLoans(prev => prev.filter(l => l.idNumber !== idNumber));
+    setBorrowerToDelete(null);
+    setShowToast(language === Language.XH ? 'Umboleki ucinyiwe!' : 'Borrower profile deleted!');
+    setTimeout(() => setShowToast(null), 3000);
   };
 
   const filteredAndSortedLoans = useMemo(() => {
@@ -778,6 +799,11 @@ const App: React.FC = () => {
                                 <CheckCircle2 size={16} />
                               </button>
                             )}
+                            {userRole === UserRole.LENDER && (
+                              <button onClick={(e) => { e.stopPropagation(); setLoanToDelete(loan); }} className="p-2.5 bg-white text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-gray-100 shadow-sm" aria-label="Delete Loan">
+                                <Trash2 size={16} />
+                              </button>
+                            )}
                             <ChevronRight onClick={() => setSelectedLoan(loan)} size={16} className="text-gray-300 group-active:text-indigo-600 cursor-pointer" />
                           </div>
                         </div>
@@ -851,9 +877,12 @@ const App: React.FC = () => {
                               <StatusDot status={loan.status} showLabel hasPenalty={penaltyInfo.penalty > 0} />
                             </td>
                             <td className="px-8 py-6 flex justify-center gap-2">
-                              <button onClick={() => setSelectedLoan(loan)} className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm"><Eye size={18} /></button>
+                              <button onClick={() => setSelectedLoan(loan)} className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm" title="View Details"><Eye size={18} /></button>
                               {userRole === UserRole.LENDER && loan.status !== RepaymentStatus.PAID && (
-                                <button onClick={() => handleMarkAsPaid(loan.id)} className="p-3 bg-white text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all border border-gray-100 shadow-sm"><CheckCircle2 size={18} /></button>
+                                <button onClick={() => handleMarkAsPaid(loan.id)} className="p-3 bg-white text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all border border-gray-100 shadow-sm" title="Mark as Paid"><CheckCircle2 size={18} /></button>
+                              )}
+                              {userRole === UserRole.LENDER && (
+                                <button onClick={() => setLoanToDelete(loan)} className="p-3 bg-white text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-gray-100 shadow-sm" title="Delete Account"><Trash2 size={18} /></button>
                               )}
                             </td>
                           </tr>
@@ -873,7 +902,10 @@ const App: React.FC = () => {
                     <div key={borrower.idNumber} className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card group hover:shadow-md transition-all">
                       <div className="flex items-start justify-between mb-6 md:mb-8 relative z-10">
                         <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-[24px] bg-indigo-600 flex items-center justify-center font-black text-lg md:text-xl text-white shadow-lg">{borrower.name[0]}</div>
-                        <div className="flex flex-col items-end gap-2"><div className={`px-4 py-2 rounded-2xl border font-black text-[12px] flex items-center gap-2 shadow-sm ${rating.bg} ${rating.color} ${rating.border} scale-110`}><rating.icon size={14} /><span className="opacity-60 uppercase tracking-tighter">TRUST:</span><span className="text-base">{borrower.score}</span></div></div>
+                        <div className="flex flex-col items-end gap-2">
+                          <div className={`px-4 py-2 rounded-2xl border font-black text-[12px] flex items-center gap-2 shadow-sm ${rating.bg} ${rating.color} ${rating.border} scale-110`}><rating.icon size={14} /><span className="opacity-60 uppercase tracking-tighter">TRUST:</span><span className="text-base">{borrower.score}</span></div>
+                          <button onClick={() => setBorrowerToDelete(borrower)} className="p-2.5 bg-rose-50 text-rose-600 rounded-xl border border-rose-100 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} /></button>
+                        </div>
                       </div>
                       <div className="space-y-4 md:space-y-6 relative z-10">
                         <div><h4 className="text-lg md:text-xl font-black text-gray-900 tracking-tight leading-none">{borrower.name}</h4><div className={`${rating.bg} ${rating.color} px-2 py-0.5 rounded-lg text-[8px] font-black uppercase border ${rating.border} mt-1 inline-block`}>{rating.label} Member</div></div>
@@ -1023,6 +1055,39 @@ const App: React.FC = () => {
             )}
           </div>
         </Layout>
+      )}
+
+      {/* Confirmation Modals */}
+      {(loanToDelete || borrowerToDelete) && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 animate-in fade-in duration-200">
+           <div className="absolute inset-0 bg-gray-950/40 backdrop-blur-sm" onClick={() => { setLoanToDelete(null); setBorrowerToDelete(null); }} />
+           <div className="bg-white max-w-sm w-full rounded-[2.5rem] p-8 shadow-2xl relative z-10 border border-gray-100 flex flex-col items-center text-center overflow-hidden">
+             <div className="absolute inset-0 opacity-[0.03] xhosa-pattern-sm pointer-events-none" />
+             <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-3xl flex items-center justify-center mb-6 shadow-sm border border-rose-100">
+                <AlertTriangle size={32} />
+             </div>
+             <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2">Are you sure?</h3>
+             <p className="text-sm text-gray-500 font-medium leading-relaxed mb-8">
+               {loanToDelete 
+                 ? `This will permanently delete Loan Account ${loanToDelete.id} for ${loanToDelete.borrowerName}. This action cannot be reversed.`
+                 : `This will permanently delete ${borrowerToDelete?.name}'s profile and ALL associated loans. This action cannot be reversed.`}
+             </p>
+             <div className="grid grid-cols-2 gap-4 w-full">
+                <button 
+                  onClick={() => { setLoanToDelete(null); setBorrowerToDelete(null); }}
+                  className="py-4 bg-gray-50 text-gray-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-gray-100 transition-all border border-gray-100"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => loanToDelete ? handleDeleteLoan(loanToDelete.id) : handleDeleteBorrower(borrowerToDelete!.idNumber)}
+                  className="py-4 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-rose-200 hover:bg-rose-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={14} /> Delete
+                </button>
+             </div>
+           </div>
+        </div>
       )}
 
       {isAddModalOpen && (
