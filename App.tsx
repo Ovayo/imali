@@ -11,7 +11,7 @@ import {
   Key, Lock, UserCircle, ReceiptText, Zap, AlertTriangle,
   Shield, Users, BarChart3, Send, Info as InfoIcon, Sun, Cloud, CloudRain, Thermometer, Wind, Droplets,
   Calendar, Percent, Scale, Calculator, Settings, RefreshCw, Trash2, Home, Mail as MailIcon, Phone, Clock, LogIn,
-  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation, ToggleLeft, ToggleRight, Check, Globe, Languages, Building2, Briefcase, ArrowUpRight, CalendarClock
+  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation, ToggleLeft, ToggleRight, Check, Globe, Languages, Building2, Briefcase, ArrowUpRight, CalendarClock, HelpCircle
 } from 'lucide-react';
 import { 
   DEFAULT_INTEREST_RATE, 
@@ -770,7 +770,17 @@ const App: React.FC = () => {
                              )}
                           </div>
                         </div>
-                        <div className="text-right flex flex-col items-end gap-2"><p className="text-sm font-black text-gray-900">R {loan.amountLoaned.toLocaleString()}</p><ChevronRight onClick={() => setSelectedLoan(loan)} size={16} className="text-gray-300 group-active:text-indigo-600 cursor-pointer" /></div>
+                        <div className="text-right flex flex-col items-end gap-4">
+                          <p className="text-sm font-black text-gray-900">R {loan.amountLoaned.toLocaleString()}</p>
+                          <div className="flex gap-2 items-center">
+                            {userRole === UserRole.LENDER && loan.status !== RepaymentStatus.PAID && (
+                              <button onClick={(e) => { e.stopPropagation(); handleMarkAsPaid(loan.id); }} className="p-2.5 bg-white text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all border border-gray-100 shadow-sm" aria-label="Mark as Paid">
+                                <CheckCircle2 size={16} />
+                              </button>
+                            )}
+                            <ChevronRight onClick={() => setSelectedLoan(loan)} size={16} className="text-gray-300 group-active:text-indigo-600 cursor-pointer" />
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
@@ -1144,7 +1154,10 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-6"><div className="w-20 h-20 rounded-3xl bg-gray-50 flex items-center justify-center text-indigo-600 border border-gray-100"><UserCircle size={48} /></div><div><h4 className="text-2xl font-black text-gray-900 leading-none mb-2">{selectedLoan.borrowerName}</h4><div className="flex flex-wrap items-center gap-4 text-[10px] text-gray-400 font-black uppercase tracking-widest"><span className="flex items-center gap-1"><Smartphone size={12} /> {selectedLoan.borrowerNumber}</span><span className="flex items-center gap-1"><Fingerprint size={12} /> {selectedLoan.idNumber}</span></div></div></div>
                 
                 <div className="space-y-4">
-                  <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100 pb-2">Financial Breakdown</h5>
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                    <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Financial Breakdown</h5>
+                    <HelpCircle size={14} className="text-gray-300 hover:text-indigo-600 cursor-help transition-colors" />
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-gray-50 p-5 rounded-3xl border border-gray-100 flex flex-col justify-center">
                       <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{t.principal}</p>
@@ -1168,6 +1181,19 @@ const App: React.FC = () => {
                       <p className="text-2xl font-black font-mono">R {(selectedLoan.totalRepayment + calculatePenaltyDetails(selectedLoan).penalty).toLocaleString()}</p>
                     </div>
                   </div>
+
+                  {calculatePenaltyDetails(selectedLoan).penalty > 0 && (
+                    <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-4 mt-4 animate-in slide-in-from-top-2 duration-300">
+                      <div className="p-2 bg-amber-100 rounded-xl text-amber-600"><Info size={18} /></div>
+                      <div>
+                        <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-1">Penalty Calculation Logic</p>
+                        <p className="text-xs font-medium text-amber-700 leading-relaxed">
+                          A penalty of <span className="font-bold">{selectedLoan.penaltyRate}%</span> of the principal (<span className="font-bold">R{selectedLoan.amountLoaned}</span>) is applied for every week overdue. 
+                          This loan is <span className="font-bold">{calculatePenaltyDetails(selectedLoan).weeks} week(s)</span> late, resulting in <span className="font-bold">R{calculatePenaltyDetails(selectedLoan).penalty}</span> added to the balance.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">
@@ -1185,7 +1211,15 @@ const App: React.FC = () => {
                 </div>
              </div>
              <div className="p-6 md:p-8 bg-gray-50/50 border-t border-gray-50 flex flex-wrap gap-4 justify-end">
-               <button onClick={() => setSelectedLoan(null)} className="w-full md:w-auto px-10 py-4 bg-[#1a1a1a] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black transition-all">Close Transaction Detail</button>
+               {userRole === UserRole.LENDER && selectedLoan.status !== RepaymentStatus.PAID && (
+                 <button 
+                   onClick={() => { handleMarkAsPaid(selectedLoan.id); setSelectedLoan(null); }} 
+                   className="flex-1 md:flex-none px-10 py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                 >
+                   <CheckCircle2 size={16} /> Mark as Paid
+                 </button>
+               )}
+               <button onClick={() => setSelectedLoan(null)} className="flex-1 md:flex-none px-10 py-4 bg-[#1a1a1a] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black transition-all">Close Details</button>
              </div>
           </div>
         </div>
