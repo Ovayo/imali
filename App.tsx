@@ -566,18 +566,18 @@ const App: React.FC = () => {
            {/* Background Pattern */}
            <div className="absolute inset-0 opacity-[0.03] xhosa-pattern scale-150 rotate-12 pointer-events-none" />
            
-           <div className="w-full flex-grow relative animate-in fade-in duration-500 flex flex-col p-0 m-0">
+           <div className="w-full flex-grow relative animate-in fade-in duration-500 flex flex-col">
               <div className="bead-accent w-full flex-shrink-0" />
               
-              <div className="flex-1 flex flex-col items-center justify-center p-0 m-0">
-                <div className="w-full p-0 m-0">
-                  <div className="flex flex-col items-center text-center mb-10 px-6 mt-10">
+              <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 md:px-24">
+                <div className="max-w-xl w-full">
+                  <div className="flex flex-col items-center text-center mb-10">
                     <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center text-white shadow-xl rotate-3 mb-6 relative group overflow-hidden">
                       <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                       <Wallet size={32} className="relative z-10" />
                     </div>
                     <h1 className="text-6xl font-black text-indigo-600 tracking-tighter uppercase mb-1 drop-shadow-sm">imali</h1>
-                    <p className="text-[11px] text-indigo-400 font-black uppercase tracking-[0.3em] mb-8 drop-shadow-sm">Micro-Lending</p>
+                    <p className="text-[11px] text-indigo-400 font-black uppercase tracking-[0.3em] mb-8 drop-shadow-sm">Micro-Lending Community</p>
                     
                     <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight leading-none mb-4">
                       {language === Language.XH ? 'Uvimba Wababoleki' : 'Borrower Hub'}
@@ -589,37 +589,35 @@ const App: React.FC = () => {
                     </p>
                   </div>
 
-                  <div className="flex bg-gray-100 p-1.5 rounded-none mb-10 border-y border-gray-200">
-                    <button onClick={() => setAuthMode('login')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-widest transition-all ${authMode === 'login' ? 'bg-white shadow-lg text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><LogIn size={16} className="inline mr-2" /> {language === Language.XH ? 'Ngena' : 'Login'}</button>
-                    <button onClick={() => setAuthMode('register')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-widest transition-all ${authMode === 'register' ? 'bg-white shadow-lg text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><UserPlus size={16} className="inline mr-2" /> {language === Language.XH ? 'Bhalisa' : 'Join Community'}</button>
+                  <div className="flex bg-gray-100 p-1.5 rounded-2xl mb-10 border border-gray-200">
+                    <button onClick={() => setAuthMode('login')} className={`flex-1 py-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${authMode === 'login' ? 'bg-white shadow-lg text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><LogIn size={16} className="inline mr-2" /> {language === Language.XH ? 'Ngena' : 'Login'}</button>
+                    <button onClick={() => setAuthMode('register')} className={`flex-1 py-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${authMode === 'register' ? 'bg-white shadow-lg text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><UserPlus size={16} className="inline mr-2" /> {language === Language.XH ? 'Bhalisa' : 'Join Community'}</button>
                   </div>
 
-                  <div className="px-6">
-                    {authMode === 'login' ? (
-                      <form onSubmit={handleLogin} className="space-y-8 pb-10">
-                        <div className="space-y-3">
-                          <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest px-1">{language === Language.XH ? 'Inombolo ye-ID' : 'ID Number'}</label>
-                          <div className="relative group">
-                            <Fingerprint className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" size={24} />
-                            <input required value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="e.g. 9201010001081" className="w-full bg-gray-50 border-none rounded-2xl pl-14 pr-8 py-5 font-black text-base tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner text-gray-900" />
-                          </div>
+                  {authMode === 'login' ? (
+                    <form onSubmit={handleLogin} className="space-y-8">
+                      <div className="space-y-3">
+                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest px-1">{language === Language.XH ? 'Inombolo ye-ID' : 'ID Number'}</label>
+                        <div className="relative group">
+                          <Fingerprint className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" size={24} />
+                          <input required value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="e.g. 9201010001081" className="w-full bg-gray-50 border-none rounded-2xl pl-14 pr-8 py-5 font-black text-base tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner text-gray-900" />
                         </div>
-                        <button type="submit" className="w-full py-6 bg-[#1a1a1a] text-white rounded-[24px] font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-4"><span>Secure Access</span><ArrowRight size={20} /></button>
-                      </form>
-                    ) : (
-                      <form onSubmit={handleRegister} className="space-y-6 pb-10">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Full Name</label><input required value={regForm.name} onChange={e => setRegForm({...regForm, name: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                          <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">ID Number</label><input required value={regForm.id} onChange={e => setRegForm({...regForm, id: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                        </div>
-                        <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Mobile Number</label><input required value={regForm.phone} onChange={e => setRegForm({...regForm, phone: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                        <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Physical Address</label><input required value={regForm.address} onChange={e => setRegForm({...regForm, address: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                        <button type="submit" className="w-full py-6 bg-indigo-600 text-white rounded-[24px] font-black text-sm uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-4 mt-4"><span>Create Community Profile</span><ShieldCheck size={20} /></button>
-                      </form>
-                    )}
-                  </div>
+                      </div>
+                      <button type="submit" className="w-full py-6 bg-[#1a1a1a] text-white rounded-[24px] font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-4"><span>Secure Access</span><ArrowRight size={20} /></button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleRegister} className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Full Name</label><input required value={regForm.name} onChange={e => setRegForm({...regForm, name: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                        <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">ID Number</label><input required value={regForm.id} onChange={e => setRegForm({...regForm, id: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                      </div>
+                      <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Mobile Number</label><input required value={regForm.phone} onChange={e => setRegForm({...regForm, phone: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                      <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Physical Address</label><input required value={regForm.address} onChange={e => setRegForm({...regForm, address: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                      <button type="submit" className="w-full py-6 bg-indigo-600 text-white rounded-[24px] font-black text-sm uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-4 mt-4"><span>Create Community Profile</span><ShieldCheck size={20} /></button>
+                    </form>
+                  )}
 
-                  <div className="mt-4 mb-12 flex flex-col items-center gap-4">
+                  <div className="mt-12 flex flex-col items-center gap-4">
                     <button onClick={() => setUserRole(UserRole.LENDER)} className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-indigo-600 transition-colors py-4 px-8 rounded-full border border-transparent hover:border-gray-100">{language === Language.XH ? 'Ulawulo lwe-Admin (Lender)' : 'Lender Admin Access'}</button>
                   </div>
                 </div>
@@ -874,7 +872,7 @@ const App: React.FC = () => {
                                 <div className="flex items-center gap-2">
                                   <p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p>
                                   {penaltyInfo.penalty > 0 && (
-                                    <span className="bg-amber-100 text-amber-600 text-[7px] font-black px-1 py-0.5 rounded flex items-center gap-0.5 uppercase tracking-tighter border border-amber-200">
+                                    <span className="bg-amber-100 text-amber-600 text-[7px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 uppercase tracking-tighter border border-amber-200">
                                       <AlertTriangle size={8} /> Penalty
                                     </span>
                                   )}
