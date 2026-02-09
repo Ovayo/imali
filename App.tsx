@@ -11,7 +11,7 @@ import {
   Key, Lock, UserCircle, ReceiptText, Zap, AlertTriangle,
   Shield, Users, BarChart3, Send, Info as InfoIcon, Sun, Cloud, CloudRain, Thermometer, Wind, Droplets,
   Calendar, Percent, Scale, Calculator, Settings, RefreshCw, Trash2, Home, Mail as MailIcon, Phone, Clock, LogIn,
-  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation, ToggleLeft, ToggleRight, Check, Globe, Languages, Building2, Briefcase, ArrowUpRight, CalendarClock, HelpCircle
+  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation, ToggleLeft, ToggleRight, Check, Globe, Languages, Building2, Briefcase, ArrowUpRight, CalendarClock, HelpCircle, MessageCircle
 } from 'lucide-react';
 import { 
   DEFAULT_INTEREST_RATE, 
@@ -331,6 +331,21 @@ const App: React.FC = () => {
     setTimeout(() => setShowToast(null), 3000);
   };
 
+  const handleWhatsAppReminder = (loan: Loan) => {
+    const penalty = calculatePenaltyDetails(loan).penalty;
+    const total = loan.totalRepayment + penalty;
+    const message = language === Language.XH 
+      ? `Molo ${loan.borrowerName}, esi sisikhumbuzo se-imali yakho engu R${total.toLocaleString()} emayihlawulwe ngomhla ka ${loan.dueDate}. Enkosi!`
+      : `Molo ${loan.borrowerName}, this is a friendly reminder for your imboleko of R${total.toLocaleString()} due on ${loan.dueDate}. Enkosi!`;
+    
+    // Clean phone number (remove spaces, ensure SA format)
+    let phone = loan.borrowerNumber.replace(/\s+/g, '');
+    if (phone.startsWith('0')) phone = '27' + phone.substring(1);
+    
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+  };
+
   const filteredAndSortedLoans = useMemo(() => {
     let baseLoans = [...loans];
     if (userRole === UserRole.BORROWER) baseLoans = baseLoans.filter(l => l.idNumber === loggedInBorrowerId);
@@ -547,60 +562,70 @@ const App: React.FC = () => {
           </div>
         </div>
       ) : userRole === UserRole.BORROWER && !loggedInBorrowerId ? (
-        <div className="fixed inset-0 z-[200] bg-[#1a1a1a] flex items-center justify-center p-6 overflow-hidden">
-           <div className="absolute inset-0 opacity-[0.03] xhosa-pattern scale-150 rotate-12" />
-           <div className="max-w-xl w-full bg-white rounded-[2.5rem] md:rounded-[40px] shadow-2xl relative animate-in fade-in zoom-in duration-500 overflow-hidden flex flex-col">
-              <div className="bead-accent absolute top-0 left-0 w-full" />
+        <div className="fixed inset-0 z-[200] bg-white flex flex-col overflow-y-auto">
+           {/* Background Pattern */}
+           <div className="absolute inset-0 opacity-[0.03] xhosa-pattern scale-150 rotate-12 pointer-events-none" />
+           
+           <div className="w-full flex-grow relative animate-in fade-in duration-500 flex flex-col p-0 m-0">
+              <div className="bead-accent w-full flex-shrink-0" />
               
-              <div className="p-8 md:p-12">
-                <div className="flex flex-col items-center text-center mb-8">
-                  <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center text-white shadow-xl rotate-3 mb-6 relative group overflow-hidden">
-                    <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <Wallet size={32} className="relative z-10" />
+              <div className="flex-1 flex flex-col items-center justify-center p-0 m-0">
+                <div className="w-full p-0 m-0">
+                  <div className="flex flex-col items-center text-center mb-10 px-6 mt-10">
+                    <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center text-white shadow-xl rotate-3 mb-6 relative group overflow-hidden">
+                      <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <Wallet size={32} className="relative z-10" />
+                    </div>
+                    <h1 className="text-6xl font-black text-indigo-600 tracking-tighter uppercase mb-1 drop-shadow-sm">imali</h1>
+                    <p className="text-[11px] text-indigo-400 font-black uppercase tracking-[0.3em] mb-8 drop-shadow-sm">Micro-Lending</p>
+                    
+                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight leading-none mb-4">
+                      {language === Language.XH ? 'Uvimba Wababoleki' : 'Borrower Hub'}
+                    </h2>
+                    <p className="text-sm font-medium text-gray-500 max-w-sm">
+                      {language === Language.XH 
+                        ? 'Ngenisa iinkcukacha zakho ukuze uqhube ukhuseleke.' 
+                        : 'Access your secure community financial profile.'}
+                    </p>
                   </div>
-                  <h1 className="text-5xl font-black text-indigo-600 tracking-tighter uppercase mb-1 drop-shadow-sm">imali</h1>
-                  <p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.2em] mb-6 drop-shadow-sm">Micro-Lending</p>
-                  
-                  <h2 className="text-xl font-black text-gray-400 uppercase tracking-[0.2em] leading-none mb-4">
-                    {language === Language.XH ? 'Uvimba Wababoleki' : 'Borrower Hub'}
-                  </h2>
-                  <p className="text-sm font-medium text-gray-400 max-w-xs">
-                    {language === Language.XH 
-                      ? 'Ngenisa iinkcukacha zakho ukuze uqhube.' 
-                      : 'Access your community financial profile securely.'}
-                  </p>
+
+                  <div className="flex bg-gray-100 p-1.5 rounded-none mb-10 border-y border-gray-200">
+                    <button onClick={() => setAuthMode('login')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-widest transition-all ${authMode === 'login' ? 'bg-white shadow-lg text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><LogIn size={16} className="inline mr-2" /> {language === Language.XH ? 'Ngena' : 'Login'}</button>
+                    <button onClick={() => setAuthMode('register')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-widest transition-all ${authMode === 'register' ? 'bg-white shadow-lg text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><UserPlus size={16} className="inline mr-2" /> {language === Language.XH ? 'Bhalisa' : 'Join Community'}</button>
+                  </div>
+
+                  <div className="px-6">
+                    {authMode === 'login' ? (
+                      <form onSubmit={handleLogin} className="space-y-8 pb-10">
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest px-1">{language === Language.XH ? 'Inombolo ye-ID' : 'ID Number'}</label>
+                          <div className="relative group">
+                            <Fingerprint className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" size={24} />
+                            <input required value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="e.g. 9201010001081" className="w-full bg-gray-50 border-none rounded-2xl pl-14 pr-8 py-5 font-black text-base tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner text-gray-900" />
+                          </div>
+                        </div>
+                        <button type="submit" className="w-full py-6 bg-[#1a1a1a] text-white rounded-[24px] font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-4"><span>Secure Access</span><ArrowRight size={20} /></button>
+                      </form>
+                    ) : (
+                      <form onSubmit={handleRegister} className="space-y-6 pb-10">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Full Name</label><input required value={regForm.name} onChange={e => setRegForm({...regForm, name: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                          <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">ID Number</label><input required value={regForm.id} onChange={e => setRegForm({...regForm, id: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                        </div>
+                        <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Mobile Number</label><input required value={regForm.phone} onChange={e => setRegForm({...regForm, phone: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                        <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Physical Address</label><input required value={regForm.address} onChange={e => setRegForm({...regForm, address: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                        <button type="submit" className="w-full py-6 bg-indigo-600 text-white rounded-[24px] font-black text-sm uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-4 mt-4"><span>Create Community Profile</span><ShieldCheck size={20} /></button>
+                      </form>
+                    )}
+                  </div>
+
+                  <div className="mt-4 mb-12 flex flex-col items-center gap-4">
+                    <button onClick={() => setUserRole(UserRole.LENDER)} className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-indigo-600 transition-colors py-4 px-8 rounded-full border border-transparent hover:border-gray-100">{language === Language.XH ? 'Ulawulo lwe-Admin (Lender)' : 'Lender Admin Access'}</button>
+                  </div>
                 </div>
-
-                <div className="flex bg-gray-50 p-1 rounded-2xl mb-8 border border-gray-100">
-                  <button onClick={() => setAuthMode('login')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${authMode === 'login' ? 'bg-white shadow-md text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><LogIn size={14} className="inline mr-2" /> {language === Language.XH ? 'Ngena' : 'Login'}</button>
-                  <button onClick={() => setAuthMode('register')} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${authMode === 'register' ? 'bg-white shadow-md text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><UserPlus size={14} className="inline mr-2" /> {language === Language.XH ? 'Bhalisa' : 'Join Community'}</button>
-                </div>
-
-                {authMode === 'login' ? (
-                  <form onSubmit={handleLogin} className="space-y-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">{language === Language.XH ? 'Inombolo ye-ID' : 'ID Number'}</label>
-                      <div className="relative group">
-                        <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" size={20} />
-                        <input required value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="e.g. 9201010001081" className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-4 font-black text-sm tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner text-gray-900" />
-                      </div>
-                    </div>
-                    <button type="submit" className="w-full py-5 bg-[#1a1a1a] text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-3"><span>Secure Access</span><ArrowRight size={18} /></button>
-                  </form>
-                ) : (
-                  <form onSubmit={handleRegister} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-1"><label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Full Name</label><input required value={regForm.name} onChange={e => setRegForm({...regForm, name: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                      <div className="space-y-1"><label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">ID Number</label><input required value={regForm.id} onChange={e => setRegForm({...regForm, id: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                    </div>
-                    <div className="space-y-1"><label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Mobile Number</label><input required value={regForm.phone} onChange={e => setRegForm({...regForm, phone: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                    <div className="space-y-1"><label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Physical Address</label><input required value={regForm.address} onChange={e => setRegForm({...regForm, address: e.target.value})} className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 font-bold text-xs shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                    <button type="submit" className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 mt-2"><span>Create Profile</span><ShieldCheck size={18} /></button>
-                  </form>
-                )}
-
-                <button onClick={() => setUserRole(UserRole.LENDER)} className="w-full py-6 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 transition-colors">{language === Language.XH ? 'Ulawulo lwe-Admin (Lender)' : 'Lender Admin Access'}</button>
               </div>
+              
+              <div className="bead-accent w-full h-8 opacity-40 flex-shrink-0" />
            </div>
         </div>
       ) : (
@@ -795,13 +820,13 @@ const App: React.FC = () => {
                           <p className="text-sm font-black text-gray-900">R {loan.amountLoaned.toLocaleString()}</p>
                           <div className="flex gap-2 items-center">
                             {userRole === UserRole.LENDER && loan.status !== RepaymentStatus.PAID && (
-                              <button onClick={(e) => { e.stopPropagation(); handleMarkAsPaid(loan.id); }} className="p-2.5 bg-white text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all border border-gray-100 shadow-sm" aria-label="Mark as Paid">
+                              <button onClick={(e) => { e.stopPropagation(); handleMarkAsPaid(loan.id); }} className="p-2.5 bg-white text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all border border-gray-100 shadow-sm" aria-label="Mark as Paid">
                                 <CheckCircle2 size={16} />
                               </button>
                             )}
                             {userRole === UserRole.LENDER && (
-                              <button onClick={(e) => { e.stopPropagation(); setLoanToDelete(loan); }} className="p-2.5 bg-white text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-gray-100 shadow-sm" aria-label="Delete Loan">
-                                <Trash2 size={16} />
+                              <button onClick={(e) => { e.stopPropagation(); handleWhatsAppReminder(loan); }} className="p-2.5 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm" aria-label="Send WhatsApp Reminder">
+                                <MessageCircle size={16} />
                               </button>
                             )}
                             <ChevronRight onClick={() => setSelectedLoan(loan)} size={16} className="text-gray-300 group-active:text-indigo-600 cursor-pointer" />
@@ -876,14 +901,34 @@ const App: React.FC = () => {
                             <td className="px-8 py-6">
                               <StatusDot status={loan.status} showLabel hasPenalty={penaltyInfo.penalty > 0} />
                             </td>
-                            <td className="px-8 py-6 flex justify-center gap-2">
-                              <button onClick={() => setSelectedLoan(loan)} className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm" title="View Details"><Eye size={18} /></button>
-                              {userRole === UserRole.LENDER && loan.status !== RepaymentStatus.PAID && (
-                                <button onClick={() => handleMarkAsPaid(loan.id)} className="p-3 bg-white text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all border border-gray-100 shadow-sm" title="Mark as Paid"><CheckCircle2 size={18} /></button>
-                              )}
-                              {userRole === UserRole.LENDER && (
-                                <button onClick={() => setLoanToDelete(loan)} className="p-3 bg-white text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-gray-100 shadow-sm" title="Delete Account"><Trash2 size={18} /></button>
-                              )}
+                            <td className="px-8 py-6">
+                              <div className="flex justify-center gap-2">
+                                <button 
+                                  onClick={() => setSelectedLoan(loan)} 
+                                  className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm flex items-center justify-center" 
+                                  title="View Details"
+                                >
+                                  <Eye size={18} />
+                                </button>
+                                {userRole === UserRole.LENDER && (
+                                  <button 
+                                    onClick={() => handleWhatsAppReminder(loan)} 
+                                    className="p-3 bg-white text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm flex items-center justify-center" 
+                                    title="WhatsApp Reminder"
+                                  >
+                                    <MessageCircle size={18} />
+                                  </button>
+                                )}
+                                {userRole === UserRole.LENDER && loan.status !== RepaymentStatus.PAID && (
+                                  <button 
+                                    onClick={() => handleMarkAsPaid(loan.id)} 
+                                    className="p-3 bg-white text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all border border-gray-100 shadow-sm flex items-center justify-center" 
+                                    title="Mark as Paid"
+                                  >
+                                    <Check size={18} />
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -1294,18 +1339,36 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-gray-950/40 backdrop-blur-xl" onClick={() => setSelectedBorrowerId(null)} />
           <div className="bg-white w-full max-w-4xl rounded-[2.5rem] md:rounded-[40px] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="absolute top-0 left-0 w-full h-40 bg-[#1a1a1a] p-8 flex items-end">
-              <div className="absolute top-4 right-4"><button onClick={() => setSelectedBorrowerId(null)} className="p-2 bg-white/10 text-white hover:bg-white/20 rounded-full transition-all"><X size={24} /></button></div>
-              <div className="flex items-center gap-6 translate-y-16">
-                <div className="w-24 h-24 md:w-36 md:h-36 rounded-[2.5rem] bg-indigo-600 flex items-center justify-center text-white text-4xl md:text-6xl font-black shadow-2xl border-4 border-white overflow-hidden relative group">{selectedBorrower.name[0]}</div>
-                <div className="mb-2">
-                  <h3 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight leading-none">{selectedBorrower.name}</h3>
-                  <div className={`px-3 py-1 rounded-full ${getScoreRating(selectedBorrower.score).bg} ${getScoreRating(selectedBorrower.score).color} text-[10px] font-black uppercase tracking-widest border ${getScoreRating(selectedBorrower.score).border} mt-2 inline-block`}>Verified {getScoreRating(selectedBorrower.score).label} Member</div>
+            {/* Modal Header Section */}
+            <div className="relative w-full h-40 bg-[#1a1a1a] p-8 flex items-start justify-end flex-shrink-0">
+              <div className="absolute inset-0 opacity-[0.05] xhosa-pattern pointer-events-none" />
+              <button 
+                onClick={() => setSelectedBorrowerId(null)} 
+                className="p-3 bg-white/10 text-white hover:bg-white/20 rounded-full transition-all z-20 backdrop-blur-md border border-white/5"
+              >
+                <X size={24} />
+              </button>
+              
+              {/* Profile Picture Overlap */}
+              <div className="absolute left-8 bottom-0 translate-y-1/2 flex items-end gap-6 z-30">
+                <div className="w-24 h-24 md:w-36 md:h-36 rounded-[2.5rem] bg-indigo-600 flex items-center justify-center text-white text-4xl md:text-6xl font-black shadow-2xl border-4 border-white overflow-hidden relative group">
+                  {selectedBorrower.name[0]}
                 </div>
               </div>
             </div>
-            <div className="pt-24 md:pt-32 p-6 md:p-12 overflow-y-auto custom-scrollbar">
-              
+
+            {/* Scrollable Content */}
+            <div className="pt-16 md:pt-24 p-6 md:p-12 overflow-y-auto custom-scrollbar flex-grow">
+              {/* Profile Identity Details (Moved below picture) */}
+              <div className="mb-10">
+                <h3 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight leading-none mb-3">
+                  {selectedBorrower.name}
+                </h3>
+                <div className={`px-3 py-1.5 rounded-full ${getScoreRating(selectedBorrower.score).bg} ${getScoreRating(selectedBorrower.score).color} text-[10px] font-black uppercase tracking-widest border ${getScoreRating(selectedBorrower.score).border} inline-flex items-center gap-2 shadow-sm`}>
+                  <ShieldCheck size={12} /> Verified {getScoreRating(selectedBorrower.score).label} Member
+                </div>
+              </div>
+
               {/* Prominent Contact Bar */}
               <div className="flex flex-wrap items-center gap-6 p-5 bg-gray-50 rounded-[32px] border border-gray-100 mb-10 shadow-sm relative overflow-hidden group">
                 <div className="absolute inset-0 xhosa-pattern-sm opacity-[0.03] pointer-events-none" />
@@ -1379,8 +1442,15 @@ const App: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div className="p-8 border-t border-gray-50 bg-gray-50/50 flex justify-end gap-4">
-              <button onClick={() => setSelectedBorrowerId(null)} className="px-10 py-4 bg-white border border-gray-100 rounded-[24px] text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 hover:border-indigo-100 shadow-sm transition-all">Close Profile View</button>
+
+            {/* Modal Footer */}
+            <div className="p-8 border-t border-gray-50 bg-gray-50/50 flex justify-end gap-4 flex-shrink-0">
+              <button 
+                onClick={() => setSelectedBorrowerId(null)} 
+                className="px-10 py-4 bg-white border border-gray-100 rounded-[24px] text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 hover:border-indigo-100 shadow-sm transition-all"
+              >
+                Close Profile View
+              </button>
             </div>
           </div>
         </div>
