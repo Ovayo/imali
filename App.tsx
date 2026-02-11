@@ -11,7 +11,7 @@ import {
   Key, Lock, UserCircle, ReceiptText, Zap, AlertTriangle,
   Shield, Users, BarChart3, Send, Info as InfoIcon, Sun, Cloud, CloudRain, Thermometer, Wind, Droplets,
   Calendar, Percent, Scale, Calculator, Settings, RefreshCw, Trash2, Home, Mail as MailIcon, Phone, Clock, LogIn,
-  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation, ToggleLeft, ToggleRight, Check, Globe, Languages, Building2, Briefcase, ArrowUpRight, CalendarClock, HelpCircle, MessageCircle
+  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation, ToggleLeft, ToggleRight, Check, Globe, Languages, Building2, Briefcase, ArrowUpRight, CalendarClock, HelpCircle, MessageCircle, Copy, Link as LinkIcon
 } from 'lucide-react';
 import { 
   DEFAULT_INTEREST_RATE, 
@@ -21,6 +21,7 @@ import {
 } from './constants';
 
 const LENDER_PASSWORD = 'imali-admin';
+const ADMIN_MAGIC_KEY = 'vault-9921-secret'; // The unique key for the admin link
 
 const EMPLOYMENT_STATUSES = [
   'Full-time',
@@ -48,6 +49,22 @@ const App: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RepaymentStatus | 'All'>('All');
 
+  // Unique Link Detection
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const vaultKey = params.get('vault_key');
+    
+    if (vaultKey === ADMIN_MAGIC_KEY) {
+      setIsLenderAuthenticated(true);
+      setUserRole(UserRole.LENDER);
+      setLoggedInBorrowerId(null);
+      // Clean up URL without refreshing
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setShowToast("Magic Link Access Granted");
+      setTimeout(() => setShowToast(null), 3000);
+    }
+  }, []);
+
   // Deletion Confirmation States
   const [loanToDelete, setLoanToDelete] = useState<Loan | null>(null);
   const [borrowerToDelete, setBorrowerToDelete] = useState<{ idNumber: string, name: string } | null>(null);
@@ -61,8 +78,6 @@ const App: React.FC = () => {
   const [loginId, setLoginId] = useState('');
   const [regForm, setRegForm] = useState({ name: '', id: '', phone: '', address: '' });
   
-  const [currentWeather, setCurrentWeather] = useState<'sunny' | 'cloudy' | 'rainy'>('sunny');
-
   const [loans, setLoans] = useState<Loan[]>(() => {
     const saved = localStorage.getItem('imali_loans_v1');
     return saved ? JSON.parse(saved) : INITIAL_LOANS;
@@ -82,6 +97,8 @@ const App: React.FC = () => {
       emailReports: false,
       emailNewAppAlerts: true,
       emailOverdueAlerts: true,
+      smsStatusUpdates: true,
+      emailStatusUpdates: false,
       darkMode: false
     };
   });
@@ -239,6 +256,7 @@ const App: React.FC = () => {
       setUserRole(UserRole.LENDER);
       setLenderAuthError(false);
       setLenderPassInput('');
+      setLoggedInBorrowerId(null); 
       setShowToast(language === Language.XH ? 'Umnini-fana uloge ngempumelelo!' : 'Lender admin authenticated!');
     } else {
       setLenderAuthError(true);
@@ -300,7 +318,6 @@ const App: React.FC = () => {
     setIsAddModalOpen(false);
     setShowToast(language === Language.XH ? 'Iakhawunti yemali ivuliwe!' : 'Loan account created successfully!');
     setTimeout(() => setShowToast(null), 3000);
-    // Reset form
     setNewLoanForm({
       borrowerName: '',
       idNumber: '',
@@ -322,11 +339,10 @@ const App: React.FC = () => {
   };
 
   const handleDeleteBorrower = (idNumber: string) => {
-    // Remove from extra profiles
     setExtraProfiles(prev => prev.filter(p => p.idNumber !== idNumber));
-    // Remove all associated loans
     setLoans(prev => prev.filter(l => l.idNumber !== idNumber));
     setBorrowerToDelete(null);
+    setSelectedBorrowerId(null);
     setShowToast(language === Language.XH ? 'Umboleki ucinyiwe!' : 'Borrower profile deleted!');
     setTimeout(() => setShowToast(null), 3000);
   };
@@ -338,7 +354,6 @@ const App: React.FC = () => {
       ? `Molo ${loan.borrowerName}, esi sisikhumbuzo se-imali yakho engu R${total.toLocaleString()} emayihlawulwe ngomhla ka ${loan.dueDate}. Enkosi!`
       : `Molo ${loan.borrowerName}, this is a friendly reminder for your imboleko of R${total.toLocaleString()} due on ${loan.dueDate}. Enkosi!`;
     
-    // Clean phone number (remove spaces, ensure SA format)
     let phone = loan.borrowerNumber.replace(/\s+/g, '');
     if (phone.startsWith('0')) phone = '27' + phone.substring(1);
     
@@ -365,14 +380,12 @@ const App: React.FC = () => {
     const overdueCount = relevantLoans.filter(l => l.status === RepaymentStatus.OVERDUE).length;
     const score = userRole === UserRole.BORROWER ? (currentBorrowerAccount?.score || 600) : new Set(relevantLoans.map(l => l.idNumber)).size;
     
-    // Profit Calculation (Realized + Projected)
     const totalProfit = relevantLoans.reduce((acc, l) => {
       const interest = l.totalRepayment - l.amountLoaned;
       const penalty = calculatePenaltyDetails(l).penalty;
       return acc + interest + penalty;
     }, 0);
 
-    // Expected Inflow (Repayments due in the next 7 days)
     const today = new Date();
     const nextWeek = new Date();
     nextWeek.setDate(today.getDate() + 7);
@@ -495,6 +508,13 @@ const App: React.FC = () => {
     setTimeout(() => setShowToast(null), 2000);
   };
 
+  const handleCopyMagicLink = () => {
+    const magicUrl = `${window.location.origin}${window.location.pathname}?vault_key=${ADMIN_MAGIC_KEY}`;
+    navigator.clipboard.writeText(magicUrl);
+    setShowToast("Unique Access Link Copied!");
+    setTimeout(() => setShowToast(null), 3000);
+  };
+
   const SettingRow = ({ title, description, icon: Icon, active, onToggle }: any) => (
     <div className="flex items-center justify-between p-6 bg-white rounded-[24px] border border-gray-100 shadow-sm group hover:border-indigo-100 transition-all">
       <div className="flex items-start gap-5">
@@ -562,68 +582,71 @@ const App: React.FC = () => {
           </div>
         </div>
       ) : userRole === UserRole.BORROWER && !loggedInBorrowerId ? (
-        <div className="fixed inset-0 z-[200] bg-white flex flex-col overflow-y-auto">
-           {/* Background Pattern */}
-           <div className="absolute inset-0 opacity-[0.03] xhosa-pattern scale-150 rotate-12 pointer-events-none" />
+        <div className="fixed inset-0 z-[200] bg-white flex flex-col overflow-hidden">
+           <div className="absolute inset-0 overflow-hidden pointer-events-none">
+             <div className="absolute inset-0 opacity-[0.03] xhosa-pattern scale-150 rotate-12" />
+           </div>
            
-           <div className="w-full flex-grow relative animate-in fade-in duration-500 flex flex-col">
-              <div className="bead-accent w-full flex-shrink-0" />
+           <div className="flex flex-col h-full w-full relative animate-in fade-in duration-500">
+              <div className="bead-accent w-full h-6 flex-shrink-0" />
               
-              <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 md:px-24">
-                <div className="max-w-xl w-full">
-                  <div className="flex flex-col items-center text-center mb-10">
+              <div className="flex-grow overflow-y-auto flex flex-col items-center custom-scrollbar">
+                <div className="w-full max-w-xl flex-grow flex flex-col items-center">
+                  <div className="flex flex-col items-center text-center mb-10 px-6 mt-10">
                     <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center text-white shadow-xl rotate-3 mb-6 relative group overflow-hidden">
                       <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                       <Wallet size={32} className="relative z-10" />
                     </div>
                     <h1 className="text-6xl font-black text-indigo-600 tracking-tighter uppercase mb-1 drop-shadow-sm">imali</h1>
-                    <p className="text-[11px] text-indigo-400 font-black uppercase tracking-[0.3em] mb-8 drop-shadow-sm">Micro-Lending Community</p>
+                    <p className="text-[11px] text-indigo-400 font-black uppercase tracking-[0.3em] mb-8 drop-shadow-sm">Micro-Lending</p>
                     
                     <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight leading-none mb-4">
                       {language === Language.XH ? 'Uvimba Wababoleki' : 'Borrower Hub'}
                     </h2>
-                    <p className="text-sm font-medium text-gray-500 max-w-sm">
+                    <p className="text-sm font-medium text-gray-500 max-w-xs md:max-w-sm">
                       {language === Language.XH 
                         ? 'Ngenisa iinkcukacha zakho ukuze uqhube ukhuseleke.' 
                         : 'Access your secure community financial profile.'}
                     </p>
                   </div>
 
-                  <div className="flex bg-gray-100 p-1.5 rounded-2xl mb-10 border border-gray-200">
-                    <button onClick={() => setAuthMode('login')} className={`flex-1 py-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${authMode === 'login' ? 'bg-white shadow-lg text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><LogIn size={16} className="inline mr-2" /> {language === Language.XH ? 'Ngena' : 'Login'}</button>
-                    <button onClick={() => setAuthMode('register')} className={`flex-1 py-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${authMode === 'register' ? 'bg-white shadow-lg text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><UserPlus size={16} className="inline mr-2" /> {language === Language.XH ? 'Bhalisa' : 'Join Community'}</button>
+                  <div className="w-full flex bg-gray-100 p-1.5 rounded-none mb-10 border-y border-gray-200 flex-shrink-0">
+                    <button onClick={() => setAuthMode('login')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-widest transition-all ${authMode === 'login' ? 'bg-white shadow-lg text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><LogIn size={16} className="inline mr-2" /> {language === Language.XH ? 'Ngena' : 'Login'}</button>
+                    <button onClick={() => setAuthMode('register')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-widest transition-all ${authMode === 'register' ? 'bg-white shadow-lg text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><UserPlus size={16} className="inline mr-2" /> {language === Language.XH ? 'Bhalisa' : 'Join'}</button>
                   </div>
 
-                  {authMode === 'login' ? (
-                    <form onSubmit={handleLogin} className="space-y-8">
-                      <div className="space-y-3">
-                        <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest px-1">{language === Language.XH ? 'Inombolo ye-ID' : 'ID Number'}</label>
-                        <div className="relative group">
-                          <Fingerprint className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" size={24} />
-                          <input required value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="e.g. 9201010001081" className="w-full bg-gray-50 border-none rounded-2xl pl-14 pr-8 py-5 font-black text-base tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner text-gray-900" />
+                  <div className="w-full px-6 flex-grow">
+                    {authMode === 'login' ? (
+                      <form onSubmit={handleLogin} className="space-y-8 pb-10">
+                        <div className="space-y-3">
+                          <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest px-1">{language === Language.XH ? 'Inombolo ye-ID' : 'ID Number'}</label>
+                          <div className="relative group">
+                            <Fingerprint className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" size={24} />
+                            <input required value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="920101XXXX081" className="w-full bg-gray-50 border-none rounded-2xl pl-14 pr-8 py-5 font-black text-base tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner text-gray-900" />
+                          </div>
                         </div>
-                      </div>
-                      <button type="submit" className="w-full py-6 bg-[#1a1a1a] text-white rounded-[24px] font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-4"><span>Secure Access</span><ArrowRight size={20} /></button>
-                    </form>
-                  ) : (
-                    <form onSubmit={handleRegister} className="space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Full Name</label><input required value={regForm.name} onChange={e => setRegForm({...regForm, name: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                        <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">ID Number</label><input required value={regForm.id} onChange={e => setRegForm({...regForm, id: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                      </div>
-                      <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Mobile Number</label><input required value={regForm.phone} onChange={e => setRegForm({...regForm, phone: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                      <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Physical Address</label><input required value={regForm.address} onChange={e => setRegForm({...regForm, address: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                      <button type="submit" className="w-full py-6 bg-indigo-600 text-white rounded-[24px] font-black text-sm uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-4 mt-4"><span>Create Community Profile</span><ShieldCheck size={20} /></button>
-                    </form>
-                  )}
+                        <button type="submit" className="w-full py-6 bg-[#1a1a1a] text-white rounded-[24px] font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-4"><span>Secure Access</span><ArrowRight size={20} /></button>
+                      </form>
+                    ) : (
+                      <form onSubmit={handleRegister} className="space-y-6 pb-10">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Full Name</label><input required value={regForm.name} onChange={e => setRegForm({...regForm, name: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                          <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">ID Number</label><input required value={regForm.id} onChange={e => setRegForm({...regForm, id: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                        </div>
+                        <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Mobile Number</label><input required value={regForm.phone} onChange={e => setRegForm({...regForm, phone: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                        <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Physical Address</label><input required value={regForm.address} onChange={e => setRegForm({...regForm, address: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
+                        <button type="submit" className="w-full py-6 bg-indigo-600 text-white rounded-[24px] font-black text-sm uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-4 mt-4"><span>Create Profile</span><ShieldCheck size={20} /></button>
+                      </form>
+                    )}
+                  </div>
 
-                  <div className="mt-12 flex flex-col items-center gap-4">
+                  <div className="mt-4 mb-12 flex flex-col items-center gap-4 flex-shrink-0">
                     <button onClick={() => setUserRole(UserRole.LENDER)} className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-indigo-600 transition-colors py-4 px-8 rounded-full border border-transparent hover:border-gray-100">{language === Language.XH ? 'Ulawulo lwe-Admin (Lender)' : 'Lender Admin Access'}</button>
                   </div>
                 </div>
               </div>
               
-              <div className="bead-accent w-full h-8 opacity-40 flex-shrink-0" />
+              <div className="bead-accent w-full h-6 opacity-40 flex-shrink-0" />
            </div>
         </div>
       ) : (
@@ -807,11 +830,6 @@ const App: React.FC = () => {
                           <p className="text-[10px] font-bold text-gray-400 font-mono">DUE: {loan.dueDate}</p>
                           <div className="mt-1 flex items-center gap-2">
                              <p className="text-[10px] font-black text-indigo-600">TOTAL DUE: R {(loan.totalRepayment + penaltyInfo.penalty).toLocaleString()}</p>
-                             {penaltyInfo.penalty > 0 && (
-                               <span className="bg-amber-100 text-amber-600 text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-1">
-                                 <AlertTriangle size={8} /> Penalty Applied
-                               </span>
-                             )}
                           </div>
                         </div>
                         <div className="text-right flex flex-col items-end gap-4">
@@ -825,6 +843,11 @@ const App: React.FC = () => {
                             {userRole === UserRole.LENDER && (
                               <button onClick={(e) => { e.stopPropagation(); handleWhatsAppReminder(loan); }} className="p-2.5 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm" aria-label="Send WhatsApp Reminder">
                                 <MessageCircle size={16} />
+                              </button>
+                            )}
+                            {userRole === UserRole.LENDER && (
+                              <button onClick={(e) => { e.stopPropagation(); setLoanToDelete(loan); }} className="p-2.5 bg-white text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-gray-100 shadow-sm" aria-label="Delete Loan">
+                                <Trash2 size={16} />
                               </button>
                             )}
                             <ChevronRight onClick={() => setSelectedLoan(loan)} size={16} className="text-gray-300 group-active:text-indigo-600 cursor-pointer" />
@@ -871,11 +894,6 @@ const App: React.FC = () => {
                               <div className="flex flex-col">
                                 <div className="flex items-center gap-2">
                                   <p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p>
-                                  {penaltyInfo.penalty > 0 && (
-                                    <span className="bg-amber-100 text-amber-600 text-[7px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 uppercase tracking-tighter border border-amber-200">
-                                      <AlertTriangle size={8} /> Penalty
-                                    </span>
-                                  )}
                                 </div>
                               </div>
                             </td>
@@ -885,15 +903,6 @@ const App: React.FC = () => {
                             <td className="px-8 py-6 bg-indigo-50/30">
                               <div className="flex flex-col">
                                 <p className="font-black text-indigo-700 font-mono text-base">R {(loan.totalRepayment + penaltyInfo.penalty).toLocaleString()}</p>
-                                {penaltyInfo.penalty > 0 ? (
-                                  <span className="text-[9px] font-black text-rose-500 uppercase tracking-tighter flex items-center gap-1">
-                                    <AlertTriangle size={8} /> R{loan.amountLoaned} + R{loan.totalRepayment - loan.amountLoaned} Int + R{penaltyInfo.penalty} Pen
-                                  </span>
-                                ) : (
-                                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">
-                                    R{loan.amountLoaned} + R{loan.totalRepayment - loan.amountLoaned} Int
-                                  </span>
-                                )}
                               </div>
                             </td>
                             <td className="px-8 py-6">
@@ -924,6 +933,15 @@ const App: React.FC = () => {
                                     title="Mark as Paid"
                                   >
                                     <Check size={18} />
+                                  </button>
+                                )}
+                                {userRole === UserRole.LENDER && (
+                                  <button 
+                                    onClick={() => setLoanToDelete(loan)} 
+                                    className="p-3 bg-white text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-gray-100 shadow-sm flex items-center justify-center" 
+                                    title="Delete Transaction"
+                                  >
+                                    <Trash2 size={18} />
                                   </button>
                                 )}
                               </div>
@@ -1001,17 +1019,6 @@ const App: React.FC = () => {
                         <div className="relative z-10">
                           <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-2">{language === Language.EN ? 'Total Repayment' : 'Iyonke emayihlawulwe'}</p>
                           <p className="text-5xl font-black tracking-tighter leading-none mb-6">R {calcResults.total.toLocaleString()}</p>
-                          
-                          <div className="grid grid-cols-2 gap-4 mt-10">
-                            <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
-                               <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Interest</p>
-                               <p className="text-xl font-black text-indigo-400">R {calcResults.interestAmount.toLocaleString()}</p>
-                            </div>
-                            <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
-                               <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Installments</p>
-                               <p className="text-xl font-black text-white">{calcResults.numInstallments}x</p>
-                            </div>
-                          </div>
                         </div>
 
                         <div className="relative z-10 pt-8 border-t border-white/10 mt-8 flex items-center justify-between">
@@ -1041,10 +1048,39 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="space-y-12">
+                   {/* Unique Access Link Section */}
                    <section className="space-y-6">
                       <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
-                        <Zap size={16} className="text-indigo-600" />
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Operational Automation</h3>
+                        <Key size={16} className="text-indigo-600" />
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Security & Private Access</h3>
+                      </div>
+                      <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm space-y-4">
+                        <div className="flex items-start gap-4">
+                          <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl shrink-0"><ShieldAlert size={20} /></div>
+                          <div className="space-y-1">
+                            <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">Unique Admin Access Link</h4>
+                            <p className="text-[11px] text-gray-500 font-medium leading-relaxed">This unique URL allows you to bypass the login password screen. Save this bookmark to your phone for instant vault access.</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-3 items-stretch">
+                           <div className="flex-1 bg-gray-50 p-4 rounded-xl font-mono text-[10px] text-gray-400 border border-gray-100 truncate flex items-center gap-2">
+                             <LinkIcon size={12} />
+                             {window.location.origin}{window.location.pathname}?vault_key=•••••
+                           </div>
+                           <button 
+                             onClick={handleCopyMagicLink}
+                             className="px-6 py-4 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shrink-0 active:scale-95"
+                           >
+                             <Copy size={14} /> Copy Secret Link
+                           </button>
+                        </div>
+                      </div>
+                   </section>
+
+                   <section className="space-y-6">
+                      <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
+                        <Bell size={16} className="text-indigo-600" />
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{t.prefNotifications}</h3>
                       </div>
                       <div className="grid grid-cols-1 gap-4">
                         <SettingRow 
@@ -1061,13 +1097,27 @@ const App: React.FC = () => {
                           active={settings.whatsappAutomation} 
                           onToggle={() => toggleSetting('whatsappAutomation')} 
                         />
+                        <SettingRow 
+                          title={t.prefSMSUpdates} 
+                          description={t.prefSMSUpdatesDesc} 
+                          icon={Send} 
+                          active={settings.smsStatusUpdates} 
+                          onToggle={() => toggleSetting('smsStatusUpdates')} 
+                        />
+                        <SettingRow 
+                          title={t.prefEmailUpdates} 
+                          description={t.prefEmailUpdatesDesc} 
+                          icon={MailIcon} 
+                          active={settings.emailStatusUpdates} 
+                          onToggle={() => toggleSetting('emailStatusUpdates')} 
+                        />
                       </div>
                    </section>
 
                    <section className="space-y-6">
                       <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
                         <Mail size={16} className="text-indigo-600" />
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Communication Protocols</h3>
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Reporting Protocols</h3>
                       </div>
                       <div className="grid grid-cols-1 gap-4">
                         <SettingRow 
@@ -1102,7 +1152,7 @@ const App: React.FC = () => {
 
       {/* Confirmation Modals */}
       {(loanToDelete || borrowerToDelete) && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 animate-in fade-in duration-200">
            <div className="absolute inset-0 bg-gray-950/40 backdrop-blur-sm" onClick={() => { setLoanToDelete(null); setBorrowerToDelete(null); }} />
            <div className="bg-white max-w-sm w-full rounded-[2.5rem] p-8 shadow-2xl relative z-10 border border-gray-100 flex flex-col items-center text-center overflow-hidden">
              <div className="absolute inset-0 opacity-[0.03] xhosa-pattern-sm pointer-events-none" />
@@ -1149,7 +1199,6 @@ const App: React.FC = () => {
              </div>
              
              <div className="p-6 md:p-10 overflow-y-auto custom-scrollbar space-y-10">
-                {/* Personal Section */}
                 <section className="space-y-6">
                   <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
                     <UserCircle size={16} className="text-indigo-600" />
@@ -1177,7 +1226,6 @@ const App: React.FC = () => {
                   </div>
                 </section>
 
-                {/* Employment Section */}
                 <section className="space-y-6">
                   <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
                     <Building2 size={16} className="text-indigo-600" />
@@ -1211,7 +1259,6 @@ const App: React.FC = () => {
                   </div>
                 </section>
 
-                {/* Financial Section */}
                 <section className="space-y-6">
                   <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
                     <Wallet size={16} className="text-indigo-600" />
@@ -1289,33 +1336,6 @@ const App: React.FC = () => {
                       <p className="text-2xl font-black font-mono">R {(selectedLoan.totalRepayment + calculatePenaltyDetails(selectedLoan).penalty).toLocaleString()}</p>
                     </div>
                   </div>
-
-                  {calculatePenaltyDetails(selectedLoan).penalty > 0 && (
-                    <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-4 mt-4 animate-in slide-in-from-top-2 duration-300">
-                      <div className="p-2 bg-amber-100 rounded-xl text-amber-600"><Info size={18} /></div>
-                      <div>
-                        <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-1">Penalty Calculation Logic</p>
-                        <p className="text-xs font-medium text-amber-700 leading-relaxed">
-                          A penalty of <span className="font-bold">{selectedLoan.penaltyRate}%</span> of the principal (<span className="font-bold">R{selectedLoan.amountLoaned}</span>) is applied for every week overdue. 
-                          This loan is <span className="font-bold">{calculatePenaltyDetails(selectedLoan).weeks} week(s)</span> late, resulting in <span className="font-bold">R{calculatePenaltyDetails(selectedLoan).penalty}</span> added to the balance.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-4">
-                   <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100 pb-2">Timeline Details</h5>
-                   <div className="grid grid-cols-2 gap-4">
-                      <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                         <Calendar size={18} className="text-indigo-600" />
-                         <div><p className="text-[8px] font-black text-gray-400 uppercase">Started</p><p className="text-xs font-black text-gray-700">{selectedLoan.startDate}</p></div>
-                      </div>
-                      <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                         <Clock size={18} className="text-indigo-600" />
-                         <div><p className="text-[8px] font-black text-gray-400 uppercase">Due Date</p><p className="text-xs font-black text-gray-700">{selectedLoan.dueDate}</p></div>
-                      </div>
-                   </div>
                 </div>
              </div>
              <div className="p-6 md:p-8 bg-gray-50/50 border-t border-gray-50 flex flex-wrap gap-4 justify-end">
@@ -1337,7 +1357,6 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-gray-950/40 backdrop-blur-xl" onClick={() => setSelectedBorrowerId(null)} />
           <div className="bg-white w-full max-w-4xl rounded-[2.5rem] md:rounded-[40px] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
-            {/* Modal Header Section */}
             <div className="relative w-full h-40 bg-[#1a1a1a] p-8 flex items-start justify-end flex-shrink-0">
               <div className="absolute inset-0 opacity-[0.05] xhosa-pattern pointer-events-none" />
               <button 
@@ -1347,7 +1366,6 @@ const App: React.FC = () => {
                 <X size={24} />
               </button>
               
-              {/* Profile Picture Overlap */}
               <div className="absolute left-8 bottom-0 translate-y-1/2 flex items-end gap-6 z-30">
                 <div className="w-24 h-24 md:w-36 md:h-36 rounded-[2.5rem] bg-indigo-600 flex items-center justify-center text-white text-4xl md:text-6xl font-black shadow-2xl border-4 border-white overflow-hidden relative group">
                   {selectedBorrower.name[0]}
@@ -1355,9 +1373,7 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Scrollable Content */}
             <div className="pt-16 md:pt-24 p-6 md:p-12 overflow-y-auto custom-scrollbar flex-grow">
-              {/* Profile Identity Details (Moved below picture) */}
               <div className="mb-10">
                 <h3 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight leading-none mb-3">
                   {selectedBorrower.name}
@@ -1367,7 +1383,6 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Prominent Contact Bar */}
               <div className="flex flex-wrap items-center gap-6 p-5 bg-gray-50 rounded-[32px] border border-gray-100 mb-10 shadow-sm relative overflow-hidden group">
                 <div className="absolute inset-0 xhosa-pattern-sm opacity-[0.03] pointer-events-none" />
                 <div className="flex items-center gap-3 relative z-10">
@@ -1441,11 +1456,18 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Modal Footer */}
-            <div className="p-8 border-t border-gray-50 bg-gray-50/50 flex justify-end gap-4 flex-shrink-0">
+            <div className="p-8 border-t border-gray-50 bg-gray-50/50 flex justify-between gap-4 flex-shrink-0">
+              {userRole === UserRole.LENDER && (
+                <button 
+                  onClick={() => setBorrowerToDelete({ idNumber: selectedBorrower.idNumber, name: selectedBorrower.name })}
+                  className="px-8 py-4 bg-rose-50 text-rose-600 rounded-[24px] text-[10px] font-black uppercase tracking-widest border border-rose-100 hover:bg-rose-100 transition-all flex items-center gap-2"
+                >
+                  <Trash2 size={14} /> Delete Profile
+                </button>
+              )}
               <button 
                 onClick={() => setSelectedBorrowerId(null)} 
-                className="px-10 py-4 bg-white border border-gray-100 rounded-[24px] text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 hover:border-indigo-100 shadow-sm transition-all"
+                className="px-10 py-4 bg-white border border-gray-100 rounded-[24px] text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 hover:border-indigo-100 shadow-sm transition-all ml-auto"
               >
                 Close Profile View
               </button>

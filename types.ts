@@ -40,6 +40,8 @@ export interface UserSettings {
   emailReports: boolean;
   emailNewAppAlerts: boolean;
   emailOverdueAlerts: boolean;
+  smsStatusUpdates: boolean; // New: SMS for Paid/Overdue/Rejected/Approved
+  emailStatusUpdates: boolean; // New: Email for status changes
   darkMode: boolean;
 }
 
