@@ -11,7 +11,7 @@ import {
   Key, Lock, UserCircle, ReceiptText, Zap, AlertTriangle,
   Shield, Users, BarChart3, Send, Info as InfoIcon, Sun, Cloud, CloudRain, Thermometer, Wind, Droplets,
   Calendar, Percent, Scale, Calculator, Settings, RefreshCw, Trash2, Home, Mail as MailIcon, Phone, Clock, LogIn,
-  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation, ToggleLeft, ToggleRight, Check, Globe, Languages, Building2, Briefcase, ArrowUpRight, CalendarClock, HelpCircle, MessageCircle, Copy, Link as LinkIcon
+  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation, ToggleLeft, ToggleRight, Check, Globe, Languages, Building2, Briefcase, ArrowUpRight, CalendarClock, HelpCircle, MessageCircle
 } from 'lucide-react';
 import { 
   DEFAULT_INTEREST_RATE, 
@@ -21,7 +21,6 @@ import {
 } from './constants';
 
 const LENDER_PASSWORD = 'imali-admin';
-const ADMIN_MAGIC_KEY = 'vault-9921-secret'; // The unique key for the admin link
 
 const EMPLOYMENT_STATUSES = [
   'Full-time',
@@ -49,22 +48,6 @@ const App: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RepaymentStatus | 'All'>('All');
 
-  // Unique Link Detection
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const vaultKey = params.get('vault_key');
-    
-    if (vaultKey === ADMIN_MAGIC_KEY) {
-      setIsLenderAuthenticated(true);
-      setUserRole(UserRole.LENDER);
-      setLoggedInBorrowerId(null);
-      // Clean up URL without refreshing
-      window.history.replaceState({}, document.title, window.location.pathname);
-      setShowToast("Magic Link Access Granted");
-      setTimeout(() => setShowToast(null), 3000);
-    }
-  }, []);
-
   // Deletion Confirmation States
   const [loanToDelete, setLoanToDelete] = useState<Loan | null>(null);
   const [borrowerToDelete, setBorrowerToDelete] = useState<{ idNumber: string, name: string } | null>(null);
@@ -78,6 +61,8 @@ const App: React.FC = () => {
   const [loginId, setLoginId] = useState('');
   const [regForm, setRegForm] = useState({ name: '', id: '', phone: '', address: '' });
   
+  const [currentWeather, setCurrentWeather] = useState<'sunny' | 'cloudy' | 'rainy'>('sunny');
+
   const [loans, setLoans] = useState<Loan[]>(() => {
     const saved = localStorage.getItem('imali_loans_v1');
     return saved ? JSON.parse(saved) : INITIAL_LOANS;
@@ -97,8 +82,6 @@ const App: React.FC = () => {
       emailReports: false,
       emailNewAppAlerts: true,
       emailOverdueAlerts: true,
-      smsStatusUpdates: true,
-      emailStatusUpdates: false,
       darkMode: false
     };
   });
@@ -256,7 +239,7 @@ const App: React.FC = () => {
       setUserRole(UserRole.LENDER);
       setLenderAuthError(false);
       setLenderPassInput('');
-      setLoggedInBorrowerId(null); 
+      setLoggedInBorrowerId(null); // Clear borrower session when entering admin
       setShowToast(language === Language.XH ? 'Umnini-fana uloge ngempumelelo!' : 'Lender admin authenticated!');
     } else {
       setLenderAuthError(true);
@@ -318,6 +301,7 @@ const App: React.FC = () => {
     setIsAddModalOpen(false);
     setShowToast(language === Language.XH ? 'Iakhawunti yemali ivuliwe!' : 'Loan account created successfully!');
     setTimeout(() => setShowToast(null), 3000);
+    // Reset form
     setNewLoanForm({
       borrowerName: '',
       idNumber: '',
@@ -354,6 +338,7 @@ const App: React.FC = () => {
       ? `Molo ${loan.borrowerName}, esi sisikhumbuzo se-imali yakho engu R${total.toLocaleString()} emayihlawulwe ngomhla ka ${loan.dueDate}. Enkosi!`
       : `Molo ${loan.borrowerName}, this is a friendly reminder for your imboleko of R${total.toLocaleString()} due on ${loan.dueDate}. Enkosi!`;
     
+    // Clean phone number (remove spaces, ensure SA format)
     let phone = loan.borrowerNumber.replace(/\s+/g, '');
     if (phone.startsWith('0')) phone = '27' + phone.substring(1);
     
@@ -508,13 +493,6 @@ const App: React.FC = () => {
     setTimeout(() => setShowToast(null), 2000);
   };
 
-  const handleCopyMagicLink = () => {
-    const magicUrl = `${window.location.origin}${window.location.pathname}?vault_key=${ADMIN_MAGIC_KEY}`;
-    navigator.clipboard.writeText(magicUrl);
-    setShowToast("Unique Access Link Copied!");
-    setTimeout(() => setShowToast(null), 3000);
-  };
-
   const SettingRow = ({ title, description, icon: Icon, active, onToggle }: any) => (
     <div className="flex items-center justify-between p-6 bg-white rounded-[24px] border border-gray-100 shadow-sm group hover:border-indigo-100 transition-all">
       <div className="flex items-start gap-5">
@@ -583,6 +561,7 @@ const App: React.FC = () => {
         </div>
       ) : userRole === UserRole.BORROWER && !loggedInBorrowerId ? (
         <div className="fixed inset-0 z-[200] bg-white flex flex-col overflow-hidden">
+           {/* Clipped Background Container to prevent horizontal scroll */}
            <div className="absolute inset-0 overflow-hidden pointer-events-none">
              <div className="absolute inset-0 opacity-[0.03] xhosa-pattern scale-150 rotate-12" />
            </div>
@@ -590,6 +569,7 @@ const App: React.FC = () => {
            <div className="flex flex-col h-full w-full relative animate-in fade-in duration-500">
               <div className="bead-accent w-full h-6 flex-shrink-0" />
               
+              {/* Scrollable Content Wrapper */}
               <div className="flex-grow overflow-y-auto flex flex-col items-center custom-scrollbar">
                 <div className="w-full max-w-xl flex-grow flex flex-col items-center">
                   <div className="flex flex-col items-center text-center mb-10 px-6 mt-10">
@@ -610,6 +590,7 @@ const App: React.FC = () => {
                     </p>
                   </div>
 
+                  {/* Flush Buttons */}
                   <div className="w-full flex bg-gray-100 p-1.5 rounded-none mb-10 border-y border-gray-200 flex-shrink-0">
                     <button onClick={() => setAuthMode('login')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-widest transition-all ${authMode === 'login' ? 'bg-white shadow-lg text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><LogIn size={16} className="inline mr-2" /> {language === Language.XH ? 'Ngena' : 'Login'}</button>
                     <button onClick={() => setAuthMode('register')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-widest transition-all ${authMode === 'register' ? 'bg-white shadow-lg text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><UserPlus size={16} className="inline mr-2" /> {language === Language.XH ? 'Bhalisa' : 'Join'}</button>
@@ -830,6 +811,11 @@ const App: React.FC = () => {
                           <p className="text-[10px] font-bold text-gray-400 font-mono">DUE: {loan.dueDate}</p>
                           <div className="mt-1 flex items-center gap-2">
                              <p className="text-[10px] font-black text-indigo-600">TOTAL DUE: R {(loan.totalRepayment + penaltyInfo.penalty).toLocaleString()}</p>
+                             {penaltyInfo.penalty > 0 && (
+                               <span className="bg-amber-100 text-amber-600 text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-1">
+                                 <AlertTriangle size={8} /> Penalty Applied
+                               </span>
+                             )}
                           </div>
                         </div>
                         <div className="text-right flex flex-col items-end gap-4">
@@ -894,6 +880,11 @@ const App: React.FC = () => {
                               <div className="flex flex-col">
                                 <div className="flex items-center gap-2">
                                   <p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p>
+                                  {penaltyInfo.penalty > 0 && (
+                                    <span className="bg-amber-100 text-amber-600 text-[7px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 uppercase tracking-tighter border border-amber-200">
+                                      <AlertTriangle size={8} /> Penalty
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </td>
@@ -903,6 +894,15 @@ const App: React.FC = () => {
                             <td className="px-8 py-6 bg-indigo-50/30">
                               <div className="flex flex-col">
                                 <p className="font-black text-indigo-700 font-mono text-base">R {(loan.totalRepayment + penaltyInfo.penalty).toLocaleString()}</p>
+                                {penaltyInfo.penalty > 0 ? (
+                                  <span className="text-[9px] font-black text-rose-500 uppercase tracking-tighter flex items-center gap-1">
+                                    <AlertTriangle size={8} /> R{loan.amountLoaned} + R{loan.totalRepayment - loan.amountLoaned} Int + R{penaltyInfo.penalty} Pen
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">
+                                    R{loan.amountLoaned} + R{loan.totalRepayment - loan.amountLoaned} Int
+                                  </span>
+                                )}
                               </div>
                             </td>
                             <td className="px-8 py-6">
@@ -1019,6 +1019,17 @@ const App: React.FC = () => {
                         <div className="relative z-10">
                           <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-2">{language === Language.EN ? 'Total Repayment' : 'Iyonke emayihlawulwe'}</p>
                           <p className="text-5xl font-black tracking-tighter leading-none mb-6">R {calcResults.total.toLocaleString()}</p>
+                          
+                          <div className="grid grid-cols-2 gap-4 mt-10">
+                            <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                               <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Interest</p>
+                               <p className="text-xl font-black text-indigo-400">R {calcResults.interestAmount.toLocaleString()}</p>
+                            </div>
+                            <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                               <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Installments</p>
+                               <p className="text-xl font-black text-white">{calcResults.numInstallments}x</p>
+                            </div>
+                          </div>
                         </div>
 
                         <div className="relative z-10 pt-8 border-t border-white/10 mt-8 flex items-center justify-between">
@@ -1048,39 +1059,10 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="space-y-12">
-                   {/* Unique Access Link Section */}
                    <section className="space-y-6">
                       <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
-                        <Key size={16} className="text-indigo-600" />
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Security & Private Access</h3>
-                      </div>
-                      <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm space-y-4">
-                        <div className="flex items-start gap-4">
-                          <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl shrink-0"><ShieldAlert size={20} /></div>
-                          <div className="space-y-1">
-                            <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">Unique Admin Access Link</h4>
-                            <p className="text-[11px] text-gray-500 font-medium leading-relaxed">This unique URL allows you to bypass the login password screen. Save this bookmark to your phone for instant vault access.</p>
-                          </div>
-                        </div>
-                        <div className="flex flex-col sm:flex-row gap-3 items-stretch">
-                           <div className="flex-1 bg-gray-50 p-4 rounded-xl font-mono text-[10px] text-gray-400 border border-gray-100 truncate flex items-center gap-2">
-                             <LinkIcon size={12} />
-                             {window.location.origin}{window.location.pathname}?vault_key=•••••
-                           </div>
-                           <button 
-                             onClick={handleCopyMagicLink}
-                             className="px-6 py-4 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 shrink-0 active:scale-95"
-                           >
-                             <Copy size={14} /> Copy Secret Link
-                           </button>
-                        </div>
-                      </div>
-                   </section>
-
-                   <section className="space-y-6">
-                      <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
-                        <Bell size={16} className="text-indigo-600" />
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{t.prefNotifications}</h3>
+                        <Zap size={16} className="text-indigo-600" />
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Operational Automation</h3>
                       </div>
                       <div className="grid grid-cols-1 gap-4">
                         <SettingRow 
@@ -1097,27 +1079,13 @@ const App: React.FC = () => {
                           active={settings.whatsappAutomation} 
                           onToggle={() => toggleSetting('whatsappAutomation')} 
                         />
-                        <SettingRow 
-                          title={t.prefSMSUpdates} 
-                          description={t.prefSMSUpdatesDesc} 
-                          icon={Send} 
-                          active={settings.smsStatusUpdates} 
-                          onToggle={() => toggleSetting('smsStatusUpdates')} 
-                        />
-                        <SettingRow 
-                          title={t.prefEmailUpdates} 
-                          description={t.prefEmailUpdatesDesc} 
-                          icon={MailIcon} 
-                          active={settings.emailStatusUpdates} 
-                          onToggle={() => toggleSetting('emailStatusUpdates')} 
-                        />
                       </div>
                    </section>
 
                    <section className="space-y-6">
                       <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
                         <Mail size={16} className="text-indigo-600" />
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Reporting Protocols</h3>
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Communication Protocols</h3>
                       </div>
                       <div className="grid grid-cols-1 gap-4">
                         <SettingRow 
@@ -1199,6 +1167,7 @@ const App: React.FC = () => {
              </div>
              
              <div className="p-6 md:p-10 overflow-y-auto custom-scrollbar space-y-10">
+                {/* Personal Section */}
                 <section className="space-y-6">
                   <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
                     <UserCircle size={16} className="text-indigo-600" />
@@ -1226,6 +1195,7 @@ const App: React.FC = () => {
                   </div>
                 </section>
 
+                {/* Employment Section */}
                 <section className="space-y-6">
                   <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
                     <Building2 size={16} className="text-indigo-600" />
@@ -1259,6 +1229,7 @@ const App: React.FC = () => {
                   </div>
                 </section>
 
+                {/* Financial Section */}
                 <section className="space-y-6">
                   <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
                     <Wallet size={16} className="text-indigo-600" />
@@ -1336,6 +1307,33 @@ const App: React.FC = () => {
                       <p className="text-2xl font-black font-mono">R {(selectedLoan.totalRepayment + calculatePenaltyDetails(selectedLoan).penalty).toLocaleString()}</p>
                     </div>
                   </div>
+
+                  {calculatePenaltyDetails(selectedLoan).penalty > 0 && (
+                    <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-4 mt-4 animate-in slide-in-from-top-2 duration-300">
+                      <div className="p-2 bg-amber-100 rounded-xl text-amber-600"><Info size={18} /></div>
+                      <div>
+                        <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-1">Penalty Calculation Logic</p>
+                        <p className="text-xs font-medium text-amber-700 leading-relaxed">
+                          A penalty of <span className="font-bold">{selectedLoan.penaltyRate}%</span> of the principal (<span className="font-bold">R{selectedLoan.amountLoaned}</span>) is applied for every week overdue. 
+                          This loan is <span className="font-bold">{calculatePenaltyDetails(selectedLoan).weeks} week(s)</span> late, resulting in <span className="font-bold">R{calculatePenaltyDetails(selectedLoan).penalty}</span> added to the balance.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                   <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100 pb-2">Timeline Details</h5>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                         <Calendar size={18} className="text-indigo-600" />
+                         <div><p className="text-[8px] font-black text-gray-400 uppercase">Started</p><p className="text-xs font-black text-gray-700">{selectedLoan.startDate}</p></div>
+                      </div>
+                      <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                         <Clock size={18} className="text-indigo-600" />
+                         <div><p className="text-[8px] font-black text-gray-400 uppercase">Due Date</p><p className="text-xs font-black text-gray-700">{selectedLoan.dueDate}</p></div>
+                      </div>
+                   </div>
                 </div>
              </div>
              <div className="p-6 md:p-8 bg-gray-50/50 border-t border-gray-50 flex flex-wrap gap-4 justify-end">
@@ -1357,6 +1355,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-gray-950/40 backdrop-blur-xl" onClick={() => setSelectedBorrowerId(null)} />
           <div className="bg-white w-full max-w-4xl rounded-[2.5rem] md:rounded-[40px] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Modal Header Section */}
             <div className="relative w-full h-40 bg-[#1a1a1a] p-8 flex items-start justify-end flex-shrink-0">
               <div className="absolute inset-0 opacity-[0.05] xhosa-pattern pointer-events-none" />
               <button 
@@ -1366,6 +1365,7 @@ const App: React.FC = () => {
                 <X size={24} />
               </button>
               
+              {/* Profile Picture Overlap */}
               <div className="absolute left-8 bottom-0 translate-y-1/2 flex items-end gap-6 z-30">
                 <div className="w-24 h-24 md:w-36 md:h-36 rounded-[2.5rem] bg-indigo-600 flex items-center justify-center text-white text-4xl md:text-6xl font-black shadow-2xl border-4 border-white overflow-hidden relative group">
                   {selectedBorrower.name[0]}
@@ -1373,7 +1373,9 @@ const App: React.FC = () => {
               </div>
             </div>
 
+            {/* Scrollable Content */}
             <div className="pt-16 md:pt-24 p-6 md:p-12 overflow-y-auto custom-scrollbar flex-grow">
+              {/* Profile Identity Details (Moved below picture) */}
               <div className="mb-10">
                 <h3 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight leading-none mb-3">
                   {selectedBorrower.name}
@@ -1383,6 +1385,7 @@ const App: React.FC = () => {
                 </div>
               </div>
 
+              {/* Prominent Contact Bar */}
               <div className="flex flex-wrap items-center gap-6 p-5 bg-gray-50 rounded-[32px] border border-gray-100 mb-10 shadow-sm relative overflow-hidden group">
                 <div className="absolute inset-0 xhosa-pattern-sm opacity-[0.03] pointer-events-none" />
                 <div className="flex items-center gap-3 relative z-10">
@@ -1456,6 +1459,7 @@ const App: React.FC = () => {
               </div>
             </div>
 
+            {/* Modal Footer */}
             <div className="p-8 border-t border-gray-50 bg-gray-50/50 flex justify-between gap-4 flex-shrink-0">
               {userRole === UserRole.LENDER && (
                 <button 
