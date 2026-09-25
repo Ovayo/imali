@@ -1,17 +1,52 @@
+
 import * as React from 'react';
 import { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import Layout from './components/Layout';
+import CameraCaptureModal from './components/CameraCaptureModal';
+import TrustScoreDisplay from './components/TrustScoreDisplay';
+import BorrowerDossierModal from './components/BorrowerDossierModal';
+import BorrowerSelfProfileView from './components/BorrowerSelfProfileView';
+import LoanSimulationTool from './components/LoanSimulationTool';
+import EditLoanModal from './components/EditLoanModal';
+import DeleteLoanModal from './components/DeleteLoanModal';
+import DataRecoveryModal from './components/DataRecoveryModal';
+import LoanEmiCalculatorModal from './components/LoanEmiCalculatorModal';
+import DeviceOnboardingView from './components/DeviceOnboardingView';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell
+  detectDeviceSession, 
+  persistBorrowerLogin, 
+  clearBorrowerLogin, 
+  persistLenderAuthentication, 
+  clearLenderAuthentication, 
+  verifyLenderPasskey,
+  DeviceSessionInfo 
+} from './services/deviceDetectionService';
+import { WhatsAppNotificationModal } from './components/WhatsAppNotificationModal';
+import { WhatsAppAutomationHub } from './components/WhatsAppAutomationHub';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { Loan, RepaymentStatus, PayoutMethod, Language, UserSettings, UserRole, ApplicationStatus } from './types';
+import { 
+  Loan, 
+  RepaymentStatus, 
+  PayoutMethod, 
+  Language, 
+  UserSettings, 
+  UserRole, 
+  ApplicationStatus, 
+  BorrowerProfile,
+  WhatsAppNotification
+} from './types';
 import { 
   TrendingUp, AlertCircle, CheckCircle2, Plus, Smartphone, ShieldCheck, Bell, Mail, Save, Search, 
-  ArrowRight, Wallet, ChevronRight, History, Info, X, Edit2, Loader2, Eye, MapPin, Fingerprint, 
-  Key, Lock, UserCircle, ReceiptText, Zap, AlertTriangle,
-  Shield, Users, BarChart3, Send, Info as InfoIcon, Sun, Cloud, CloudRain, Thermometer, Wind, Droplets,
-  Calendar, Percent, Scale, Calculator, Settings, RefreshCw, Trash2, Home, Mail as MailIcon, Phone, Clock, LogIn,
-  Waves, Gauge, Star, ShieldAlert, UserPlus, Navigation, ToggleLeft, ToggleRight, Check, Globe, Languages, Building2, Briefcase, ArrowUpRight, CalendarClock, HelpCircle, MessageCircle
+  ArrowRight, Wallet, ChevronRight, History, Info, X, Loader2, Eye, MapPin, Fingerprint, 
+  Key, UserCircle, ReceiptText, Zap, AlertTriangle, Shield, Users, BarChart3, Send, 
+  Thermometer, Wind, Droplets, Calendar, Calculator, Settings, RefreshCw, Trash2, Home, 
+  Mail as MailIcon, Clock, LogIn, Star, ShieldAlert, UserPlus, Navigation, Check, 
+  Building2, Briefcase, ArrowUpRight, CalendarClock, HelpCircle, MessageCircle, Copy, 
+  Link as LinkIcon, ClipboardList, Camera, Sparkles, Filter, ArrowUpDown, UserCheck, FileText, CheckCheck,
+  Database, FolderSync, Edit3
 } from 'lucide-react';
 import { 
   DEFAULT_INTEREST_RATE, 
@@ -19,85 +54,268 @@ import {
   INITIAL_LOANS, 
   TRANSLATIONS 
 } from './constants';
+import {
+  subscribeToBorrowers,
+  subscribeToLoans,
+  subscribeToSettings,
+  saveBorrowerToFirestore,
+  deleteBorrowerFromFirestore,
+  saveLoanToFirestore,
+  deleteLoanFromFirestore,
+  saveSettingsToFirestore,
+  seedInitialDataIfEmpty,
+  getDeletedLoanIds,
+  markLoanAsDeleted,
+  getDeletedBorrowerIds,
+  markBorrowerAsDeleted,
+  purgeLoanFromLocalStorage
+} from './services/firestoreSync';
+import {
+  downloadJSONBackup,
+  downloadLoansCSV
+} from './services/dataRecoveryService';
+import {
+  dispatchAutomatedNotification,
+  runAutomatedOverdueAudit,
+  subscribeToNotifications,
+  getLocalNotifications,
+  buildOverdueMessage,
+  buildApprovalMessage
+} from './services/whatsappNotificationService';
 
 const LENDER_PASSWORD = 'imali-admin';
 
 const EMPLOYMENT_STATUSES = [
-  'Full-time',
-  'Part-time',
-  'Self-employed',
-  'Contract',
-  'Unemployed',
-  'Student',
-  'Retired'
+  'Full-time', 'Part-time', 'Self-employed', 'Contract', 'Unemployed', 'Student', 'Retired'
 ];
 
+const generateRandomKey = () => {
+  return 'vault-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+};
+
 const App: React.FC = () => {
-  const [appLoading, setAppLoading] = useState(true);
   const [language, setLanguage] = useState<Language>(Language.EN);
   const [activeTab, setActiveTab] = useState('dashboard');
-  
-  const [userRole, setUserRole] = useState<UserRole>(UserRole.BORROWER); 
-  const [isLenderAuthenticated, setIsLenderAuthenticated] = useState(false);
+  const [deviceSession, setDeviceSession] = useState<DeviceSessionInfo>(() => {
+    return detectDeviceSession();
+  });
+  const [userRole, setUserRole] = useState<UserRole>(() => {
+    const session = detectDeviceSession();
+    return session.recommendedRole; // Defaults to BORROWER so new visitors/devices never see admin dashboard!
+  }); 
+  const [isLenderAuthenticated, setIsLenderAuthenticated] = useState<boolean>(() => {
+    const session = detectDeviceSession();
+    return session.isLenderAuthenticated; // Requires explicit passkey or admin vault URL
+  });
   const [lenderPassInput, setLenderPassInput] = useState('');
   const [lenderAuthError, setLenderAuthError] = useState(false);
-
-  const [loggedInBorrowerId, setLoggedInBorrowerId] = useState<string | null>(null);
-  
+  const [loggedInBorrowerId, setLoggedInBorrowerId] = useState<string | null>(() => {
+    const session = detectDeviceSession();
+    return session.loggedInBorrowerId;
+  });
   const [showToast, setShowToast] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<RepaymentStatus | 'All'>('All');
+  const [statusFilter, setStatusFilter] = useState<RepaymentStatus | 'all'>('all');
+  const [borrowerFilter, setBorrowerFilter] = useState<'all' | 'active' | 'debt_free' | 'overdue' | 'high_trust' | 'kyc_pending'>('all');
+  const [borrowerSort, setBorrowerSort] = useState<'score_desc' | 'score_asc' | 'borrowed_desc' | 'name_asc'>('score_desc');
 
-  // Deletion Confirmation States
+  const [loans, setLoans] = useState<Loan[]>(() => {
+    const deletedLoanIds = getDeletedLoanIds();
+    const filterDeleted = (arr: Loan[]) => arr.filter(l => l && l.id && !deletedLoanIds.has(l.id));
+
+    const primary = localStorage.getItem('imali_loans_v1');
+    if (primary) {
+      try {
+        const parsed = JSON.parse(primary);
+        if (Array.isArray(parsed)) return filterDeleted(parsed);
+      } catch {}
+    }
+    const legacyKeys = ['imali_loans', 'loans', 'imali_ledger', 'imali_backup_loans', 'imali_data_loans'];
+    for (const k of legacyKeys) {
+      const leg = localStorage.getItem(k);
+      if (leg) {
+        try {
+          const parsed = JSON.parse(leg);
+          if (Array.isArray(parsed) && parsed.length > 0) return filterDeleted(parsed);
+        } catch {}
+      }
+    }
+    // If user deleted all loans, respect that and do not bring back initial loans
+    if (deletedLoanIds.size > 0) {
+      return [];
+    }
+    return filterDeleted(INITIAL_LOANS);
+  });
+
+  const [extraProfiles, setExtraProfiles] = useState<BorrowerProfile[]>(() => {
+    const deletedBorrowerIds = getDeletedBorrowerIds();
+    const filterDeleted = (arr: BorrowerProfile[]) => arr.filter(p => p && p.idNumber && !deletedBorrowerIds.has(p.idNumber));
+
+    const primary = localStorage.getItem('imali_profiles_v1');
+    if (primary) {
+      try {
+        const parsed = JSON.parse(primary);
+        if (Array.isArray(parsed)) return filterDeleted(parsed);
+      } catch {}
+    }
+    const legacyKeys = ['imali_profiles', 'imali_borrowers', 'borrowers', 'borrower_profiles', 'imali_clients'];
+    for (const k of legacyKeys) {
+      const leg = localStorage.getItem(k);
+      if (leg) {
+        try {
+          const parsed = JSON.parse(leg);
+          if (Array.isArray(parsed) && parsed.length > 0) return filterDeleted(parsed);
+        } catch {}
+      }
+    }
+    return [];
+  });
+
+  const [settings, setSettings] = useState<UserSettings>(() => {
+    const saved = localStorage.getItem('imali_settings_v1');
+    const base = saved ? JSON.parse(saved) : {
+      overdueAlerts: true,
+      whatsappAutomation: true,
+      whatsappAutoOverdue: true,
+      whatsappAutoApproval: true,
+      whatsappAutoOpen: false,
+      emailReports: false,
+      emailNewAppAlerts: true,
+      emailOverdueAlerts: true,
+      smsStatusUpdates: true,
+      emailStatusUpdates: false,
+      darkMode: false,
+    };
+    if (!base.adminVaultKey) base.adminVaultKey = generateRandomKey();
+    if (base.whatsappAutoOverdue === undefined) base.whatsappAutoOverdue = true;
+    if (base.whatsappAutoApproval === undefined) base.whatsappAutoApproval = true;
+    if (base.whatsappAutoOpen === undefined) base.whatsappAutoOpen = false;
+    return base;
+  });
+
+  // Automated WhatsApp Notification Service State
+  const [activeWhatsAppNotification, setActiveWhatsAppNotification] = useState<WhatsAppNotification | null>(null);
+  const [isWhatsAppHubOpen, setIsWhatsAppHubOpen] = useState(false);
+  const [whatsAppNotifications, setWhatsAppNotifications] = useState<WhatsAppNotification[]>(() => getLocalNotifications());
+
+  // Camera Capture Modal State
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [cameraTargetId, setCameraTargetId] = useState<string | null>(null);
+  const [cameraTargetContext, setCameraTargetContext] = useState<'current_user' | 'borrower' | 'registration' | 'new_loan'>('current_user');
+
+  // Data Recovery Modal State
+  const [isDataRecoveryOpen, setIsDataRecoveryOpen] = useState(false);
+
+  // Loan EMI & Penalty Calculator Modal State
+  const [isEmiCalculatorModalOpen, setIsEmiCalculatorModalOpen] = useState(false);
+
   const [loanToDelete, setLoanToDelete] = useState<Loan | null>(null);
+  const [loanToEdit, setLoanToEdit] = useState<Loan | null>(null);
   const [borrowerToDelete, setBorrowerToDelete] = useState<{ idNumber: string, name: string } | null>(null);
-
-  // Geolocation & City State
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [detectedCity, setDetectedCity] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
 
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [loginId, setLoginId] = useState('');
-  const [regForm, setRegForm] = useState({ name: '', id: '', phone: '', address: '' });
-  
-  const [currentWeather, setCurrentWeather] = useState<'sunny' | 'cloudy' | 'rainy'>('sunny');
+  const [regForm, setRegForm] = useState({ name: '', id: '', phone: '', address: '', profilePhoto: '' });
 
-  const [loans, setLoans] = useState<Loan[]>(() => {
-    const saved = localStorage.getItem('imali_loans_v1');
-    return saved ? JSON.parse(saved) : INITIAL_LOANS;
-  });
-
-  const [extraProfiles, setExtraProfiles] = useState<any[]>(() => {
-    const saved = localStorage.getItem('imali_profiles_v1');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // Settings State
-  const [settings, setSettings] = useState<UserSettings>(() => {
-    const saved = localStorage.getItem('imali_settings_v1');
-    return saved ? JSON.parse(saved) : {
-      overdueAlerts: true,
-      whatsappAutomation: true,
-      emailReports: false,
-      emailNewAppAlerts: true,
-      emailOverdueAlerts: true,
-      darkMode: false
-    };
-  });
-
-  // New Loan Form State
   const [newLoanForm, setNewLoanForm] = useState({
-    borrowerName: '',
-    idNumber: '',
-    physicalAddress: '',
-    borrowerNumber: '',
-    employer: '',
-    employmentStatus: 'Full-time',
-    amountLoaned: 1000,
-    dueDate: '',
-    payoutMethod: PayoutMethod.MOBILE
+    borrowerName: '', idNumber: '', physicalAddress: '', borrowerNumber: '',
+    employer: '', employmentStatus: 'Full-time', amountLoaned: 1000,
+    dueDate: '', payoutMethod: PayoutMethod.MOBILE, profilePhoto: ''
   });
+
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null);
+  const [isSendingNotifications, setIsSendingNotifications] = useState(false);
+  const [isCloudConnected, setIsCloudConnected] = useState(false);
+
+  // Initialize and subscribe to Firestore for real-time cross-device updates
+  useEffect(() => {
+    // Seed initial demo data in Firestore only if database is brand new and not previously initialized/deleted
+    seedInitialDataIfEmpty();
+
+    // 1. Subscribe to Borrower Profiles
+    const unsubBorrowers = subscribeToBorrowers((cloudProfiles) => {
+      const deletedBorrowerIds = getDeletedBorrowerIds();
+      const validProfiles = (cloudProfiles || []).filter(p => p && p.idNumber && !deletedBorrowerIds.has(p.idNumber));
+      setExtraProfiles(validProfiles);
+      setIsCloudConnected(true);
+    });
+
+    // 2. Subscribe to Loans
+    const unsubLoans = subscribeToLoans((cloudLoans) => {
+      const deletedLoanIds = getDeletedLoanIds();
+      const validLoans = (cloudLoans || []).filter(l => l && l.id && !deletedLoanIds.has(l.id));
+      setLoans(validLoans);
+      setIsCloudConnected(true);
+    });
+
+    // 3. Subscribe to Settings
+    const unsubSettings = subscribeToSettings((cloudSettings) => {
+      if (cloudSettings) {
+        setSettings(prev => ({ ...prev, ...cloudSettings }));
+      }
+    });
+
+    // 4. Subscribe to WhatsApp Notifications
+    const unsubNotifs = subscribeToNotifications((cloudNotifs) => {
+      if (cloudNotifs) {
+        setWhatsAppNotifications(cloudNotifs);
+      }
+    });
+
+    return () => {
+      unsubBorrowers();
+      unsubLoans();
+      unsubSettings();
+      unsubNotifs();
+    };
+  }, []);
+
+  // Automated Overdue Auditor: Detects loans turning Overdue and triggers automated WhatsApp reminders
+  useEffect(() => {
+    if (loans.length === 0) return;
+    if (settings.whatsappAutomation === false || settings.whatsappAutoOverdue === false) return;
+
+    const result = runAutomatedOverdueAudit(loans, settings);
+    if (result.transitionedLoans.length > 0) {
+      setLoans(result.updatedLoans);
+      result.transitionedLoans.forEach(l => {
+        saveLoanToFirestore(l).catch(err => console.warn('Sync overdue status failed:', err));
+      });
+
+      if (result.notificationsGenerated.length > 0) {
+        setActiveWhatsAppNotification(result.notificationsGenerated[0]);
+        setShowToast(`🚨 Automated Alert: ${result.transitionedLoans.length} loan(s) transitioned to Overdue! WhatsApp reminder ready.`);
+        setTimeout(() => setShowToast(null), 4500);
+      }
+    }
+  }, [loans, settings.whatsappAutomation, settings.whatsappAutoOverdue]);
+
+  useEffect(() => {
+    localStorage.setItem('imali_user_role_v2', userRole);
+    setDeviceSession(detectDeviceSession());
+  }, [userRole]);
+
+  useEffect(() => {
+    if (isLenderAuthenticated) {
+      persistLenderAuthentication();
+    } else {
+      clearLenderAuthentication();
+    }
+    setDeviceSession(detectDeviceSession());
+  }, [isLenderAuthenticated]);
+
+  useEffect(() => {
+    if (loggedInBorrowerId) {
+      persistBorrowerLogin(loggedInBorrowerId);
+    } else {
+      clearBorrowerLogin();
+    }
+    setDeviceSession(detectDeviceSession());
+  }, [loggedInBorrowerId]);
 
   useEffect(() => {
     localStorage.setItem('imali_profiles_v1', JSON.stringify(extraProfiles));
@@ -107,10 +325,41 @@ const App: React.FC = () => {
     localStorage.setItem('imali_settings_v1', JSON.stringify(settings));
   }, [settings]);
 
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
-  const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null);
-  const [isSendingNotifications, setIsSendingNotifications] = useState(false);
+  useEffect(() => {
+    localStorage.setItem('imali_loans_v1', JSON.stringify(loans));
+  }, [loans]);
+
+  // Fix: Added missing toggleSetting function to handle boolean setting updates
+  const toggleSetting = (key: keyof UserSettings) => {
+    setSettings(prev => {
+      const updated = {
+        ...prev,
+        [key]: typeof prev[key] === 'boolean' ? !prev[key] : prev[key]
+      };
+      saveSettingsToFirestore(updated).catch(err => console.warn('Cloud save settings deferred:', err));
+      return updated;
+    });
+  };
+
+  // Fix: Added missing handleCopyMagicLink function to copy the vault access link to clipboard
+  const handleCopyMagicLink = () => {
+    const link = `${window.location.origin}${window.location.pathname}?vault_key=${settings.adminVaultKey}`;
+    navigator.clipboard.writeText(link);
+    setShowToast("Magic link copied to clipboard!");
+    setTimeout(() => setShowToast(null), 3000);
+  };
+
+  // Fix: Added missing handleRegenerateKey function to generate a new admin vault security key
+  const handleRegenerateKey = () => {
+    const newKey = generateRandomKey();
+    setSettings(prev => {
+      const updated = { ...prev, adminVaultKey: newKey };
+      saveSettingsToFirestore(updated).catch(err => console.warn('Cloud save settings key deferred:', err));
+      return updated;
+    });
+    setShowToast("Security key regenerated!");
+    setTimeout(() => setShowToast(null), 3000);
+  };
 
   const handleSendNotifications = () => {
     setIsSendingNotifications(true);
@@ -123,68 +372,32 @@ const App: React.FC = () => {
 
   const t = TRANSLATIONS[language];
 
-  // Geolocation Effect
   useEffect(() => {
     if ("geolocation" in navigator && loggedInBorrowerId) {
       setIsLocating(true);
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
-          setUserLocation({ lat: latitude, lng: longitude });
-          
           try {
             const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`);
             const data = await response.json();
             const city = data.address.city || data.address.town || data.address.village || data.address.suburb || data.address.county;
             if (city) setDetectedCity(city);
-          } catch (err) {
-            console.error("Reverse geocoding failed", err);
-          }
-          
+          } catch (err) { console.error(err); }
           setIsLocating(false);
         },
-        (error) => {
-          console.warn("Geolocation denied or unavailable:", error);
-          setIsLocating(false);
-        },
+        () => setIsLocating(false),
         { timeout: 10000 }
       );
     }
   }, [loggedInBorrowerId]);
-
-  // Calculator State
-  const [calcAmount, setCalcAmount] = useState<number>(2500);
-  const [calcInterest, setCalcInterest] = useState<number>(30);
-  const [calcWeeks, setCalcWeeks] = useState<number>(4);
-  const [calcFrequency, setCalcFrequency] = useState<'weekly' | 'fortnightly' | 'monthly'>('weekly');
-
-  const calcResults = useMemo(() => {
-    const interestAmount = Math.round(calcAmount * (calcInterest / 100));
-    const total = calcAmount + interestAmount;
-    let numInstallments = calcWeeks;
-    if (calcFrequency === 'fortnightly') numInstallments = Math.max(1, Math.floor(calcWeeks / 2));
-    if (calcFrequency === 'monthly') numInstallments = Math.max(1, Math.floor(calcWeeks / 4));
-    
-    const perInstallment = Math.round(total / numInstallments);
-    return { interestAmount, total, perInstallment, numInstallments };
-  }, [calcAmount, calcInterest, calcWeeks, calcFrequency]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => { setAppLoading(false); }, 2800);
-    return () => { clearTimeout(timer); };
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('imali_loans_v1', JSON.stringify(loans));
-  }, [loans]);
 
   const calculatePenaltyDetails = (loan: Loan) => {
     if (loan.status !== RepaymentStatus.OVERDUE) return { penalty: 0, weeks: 0 };
     const dueDate = new Date(loan.dueDate);
     const today = new Date();
     const diffTime = Math.max(0, today.getTime() - dueDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const weeksOverdue = Math.max(1, Math.ceil(diffDays / 7));
+    const weeksOverdue = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 7)));
     const penaltyAmount = loan.amountLoaned * (loan.penaltyRate / 100) * weeksOverdue;
     return { penalty: Math.round(penaltyAmount), weeks: weeksOverdue };
   };
@@ -207,1278 +420,2458 @@ const App: React.FC = () => {
   };
 
   const borrowers = useMemo(() => {
-    const map = new Map<string, { idNumber: string, name: string, address: string, phone: string, email: string, score: number, loans: Loan[] }>();
+    const map = new Map<string, any>();
     loans.forEach(loan => {
       if (!map.has(loan.idNumber)) {
         map.set(loan.idNumber, { 
-          idNumber: loan.idNumber, name: loan.borrowerName, address: loan.physicalAddress,
-          phone: loan.borrowerNumber, email: loan.email || loan.idNumber.substring(0, 5) + '@biz.co.za',
-          loans: [], score: 0
+          idNumber: loan.idNumber, 
+          name: loan.borrowerName, 
+          address: loan.physicalAddress,
+          phone: loan.borrowerNumber, 
+          email: loan.email || loan.idNumber.substring(0, 5) + '@biz.co.za',
+          profilePhoto: loan.profilePhoto,
+          employer: loan.employer || '',
+          employmentStatus: loan.employmentStatus || 'Employed',
+          payoutMethod: loan.payoutMethod || PayoutMethod.BANK,
+          bankDetails: loan.bankDetails || '',
+          loans: [], 
+          score: 0,
+          kycVerified: false,
         });
       }
       map.get(loan.idNumber)!.loans.push(loan);
-    });
-    extraProfiles.forEach(p => {
-      if (!map.has(p.idNumber)) {
-        map.set(p.idNumber, { ...p, loans: [], score: 600 });
+      if (loan.profilePhoto && !map.get(loan.idNumber)!.profilePhoto) {
+        map.get(loan.idNumber)!.profilePhoto = loan.profilePhoto;
       }
     });
-    map.forEach(b => { b.score = calculateCreditScore(b.loans); });
+    extraProfiles.forEach(p => { 
+      if (!map.has(p.idNumber)) {
+        map.set(p.idNumber, { ...p, loans: [], score: 600 });
+      } else {
+        const existing = map.get(p.idNumber)!;
+        Object.assign(existing, p);
+      }
+    });
+    map.forEach(b => {
+      b.score = calculateCreditScore(b.loans);
+    });
     return Array.from(map.values());
   }, [loans, extraProfiles]);
+
+  // Deep linking and URL navigation parameters handler
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const vaultKey = params.get('vault_key');
+    const calcParam = params.get('calc') || params.get('tab') === 'calculator';
+    const applyParam = params.get('apply') || params.get('tab') === 'apply';
+    const roleParam = params.get('role');
+    const adminParam = params.get('admin');
+    const borrowerParam = params.get('borrower_id');
+
+    if (vaultKey && settings.adminVaultKey && vaultKey.trim() === settings.adminVaultKey.trim()) {
+      setIsLenderAuthenticated(true);
+      persistLenderAuthentication();
+      setUserRole(UserRole.LENDER);
+      setLoggedInBorrowerId(null);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setShowToast("Private Vault Access Granted — Welcome Ovayo Monti");
+      setTimeout(() => setShowToast(null), 3500);
+    } else if (roleParam === 'lender' || adminParam === 'true') {
+      setUserRole(UserRole.LENDER);
+      setIsLenderAuthenticated(false);
+    }
+
+    if (borrowerParam && borrowers.length > 0) {
+      const cleanParam = borrowerParam.trim();
+      const found = borrowers.find(b => b.idNumber === cleanParam);
+      if (found) {
+        setLoggedInBorrowerId(found.idNumber);
+        persistBorrowerLogin(found.idNumber);
+        setUserRole(UserRole.BORROWER);
+      }
+    }
+
+    if (calcParam) {
+      setIsEmiCalculatorModalOpen(true);
+    }
+
+    if (applyParam) {
+      setIsAddModalOpen(true);
+    }
+  }, [settings.adminVaultKey, borrowers]);
+
+  const selectedBorrower = useMemo(() => {
+    if (!selectedBorrowerId) return null;
+    return borrowers.find(b => b.idNumber === selectedBorrowerId) || null;
+  }, [borrowers, selectedBorrowerId]);
+
+  const filteredAndSortedBorrowers = useMemo(() => {
+    let list = borrowers.filter(b => 
+      b.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      b.idNumber.includes(searchTerm) ||
+      (b.phone && b.phone.includes(searchTerm)) ||
+      (b.address && b.address.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    if (borrowerFilter === 'active') {
+      list = list.filter(b => b.loans.some((l: Loan) => l.status === RepaymentStatus.PENDING || l.status === RepaymentStatus.OVERDUE));
+    } else if (borrowerFilter === 'debt_free') {
+      list = list.filter(b => !b.loans.some((l: Loan) => l.status === RepaymentStatus.PENDING || l.status === RepaymentStatus.OVERDUE));
+    } else if (borrowerFilter === 'overdue') {
+      list = list.filter(b => b.loans.some((l: Loan) => l.status === RepaymentStatus.OVERDUE));
+    } else if (borrowerFilter === 'high_trust') {
+      list = list.filter(b => b.score >= 700);
+    } else if (borrowerFilter === 'kyc_pending') {
+      list = list.filter(b => !b.kycVerified);
+    }
+
+    return list.sort((a, b) => {
+      if (borrowerSort === 'score_desc') return b.score - a.score;
+      if (borrowerSort === 'score_asc') return a.score - b.score;
+      if (borrowerSort === 'name_asc') return a.name.localeCompare(b.name);
+      if (borrowerSort === 'borrowed_desc') {
+        const aTotal = a.loans.reduce((sum: number, l: Loan) => sum + l.amountLoaned, 0);
+        const bTotal = b.loans.reduce((sum: number, l: Loan) => sum + l.amountLoaned, 0);
+        return bTotal - aTotal;
+      }
+      return 0;
+    });
+  }, [borrowers, searchTerm, borrowerFilter, borrowerSort]);
+
+  const borrowerNetworkStats = useMemo(() => {
+    const total = borrowers.length;
+    const withActiveDebt = borrowers.filter(b => b.loans.some((l: Loan) => l.status === RepaymentStatus.PENDING || l.status === RepaymentStatus.OVERDUE)).length;
+    const withOverdue = borrowers.filter(b => b.loans.some((l: Loan) => l.status === RepaymentStatus.OVERDUE)).length;
+    const cleanRate = total > 0 ? (((total - withOverdue) / total) * 100) : 100;
+    const avgScore = total > 0 ? Math.round(borrowers.reduce((acc, b) => acc + b.score, 0) / total) : 600;
+
+    return { total, withActiveDebt, withOverdue, cleanRate, avgScore };
+  }, [borrowers]);
 
   const currentBorrowerAccount = useMemo(() => {
     if (!loggedInBorrowerId) return null;
     return borrowers.find(b => b.idNumber === loggedInBorrowerId) || null;
   }, [borrowers, loggedInBorrowerId]);
 
-  const handleLenderAuth = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (lenderPassInput === LENDER_PASSWORD) {
+  const openCameraCapture = (context: 'current_user' | 'borrower' | 'registration' | 'new_loan', targetId?: string) => {
+    setCameraTargetContext(context);
+    setCameraTargetId(targetId || (context === 'current_user' ? loggedInBorrowerId : null));
+    setIsCameraModalOpen(true);
+  };
+
+  const handleCapturedPhoto = (base64Photo?: string) => {
+    if (cameraTargetContext === 'registration') {
+      setRegForm(prev => ({ ...prev, profilePhoto: base64Photo || '' }));
+      setShowToast(base64Photo ? "Profile photo captured!" : "Profile photo removed.");
+      setTimeout(() => setShowToast(null), 3000);
+      return;
+    }
+
+    if (cameraTargetContext === 'new_loan') {
+      setNewLoanForm(prev => ({ ...prev, profilePhoto: base64Photo || '' }));
+      setShowToast(base64Photo ? "Photo attached to loan application" : "Photo removed");
+      setTimeout(() => setShowToast(null), 3000);
+      return;
+    }
+
+    const targetId = cameraTargetId || loggedInBorrowerId;
+    if (!targetId && userRole === UserRole.LENDER) {
+      setSettings(prev => {
+        const next = { ...prev, lenderPhoto: base64Photo };
+        saveSettingsToFirestore(next).catch(err => console.warn('Cloud save settings photo deferred:', err));
+        return next;
+      });
+      setShowToast(base64Photo ? "Lender profile photo saved!" : "Lender profile photo removed.");
+      setTimeout(() => setShowToast(null), 3000);
+      return;
+    }
+
+    if (targetId) {
+      setExtraProfiles(prev => {
+        const exists = prev.some(p => p.idNumber === targetId);
+        let updatedList: BorrowerProfile[];
+        if (exists) {
+          updatedList = prev.map(p => p.idNumber === targetId ? { ...p, profilePhoto: base64Photo } : p);
+        } else {
+          const b = borrowers.find(item => item.idNumber === targetId);
+          updatedList = [...prev, {
+            idNumber: targetId,
+            name: b?.name || 'Borrower',
+            phone: b?.phone || '',
+            address: b?.address || '',
+            email: b?.email || '',
+            profilePhoto: base64Photo
+          }];
+        }
+        const updatedProfile = updatedList.find(p => p.idNumber === targetId);
+        if (updatedProfile) {
+          saveBorrowerToFirestore(updatedProfile).catch(err => console.warn('Cloud save photo deferred:', err));
+        }
+        return updatedList;
+      });
+
+      setLoans(prev => {
+        const updatedLoans = prev.map(l => {
+          if (l.idNumber === targetId) {
+            const upd = { ...l, profilePhoto: base64Photo };
+            saveLoanToFirestore(upd).catch(err => console.warn('Cloud save loan photo deferred:', err));
+            return upd;
+          }
+          return l;
+        });
+        return updatedLoans;
+      });
+
+      if (selectedLoan && selectedLoan.idNumber === targetId) {
+        setSelectedLoan(prev => prev ? { ...prev, profilePhoto: base64Photo } : null);
+      }
+
+      setShowToast(base64Photo ? "Profile photo saved to vault!" : "Profile photo removed.");
+      setTimeout(() => setShowToast(null), 3000);
+    }
+  };
+
+  const getCurrentPhotoForContext = (): string | undefined => {
+    if (cameraTargetContext === 'registration') return regForm.profilePhoto || undefined;
+    if (cameraTargetContext === 'new_loan') return newLoanForm.profilePhoto || undefined;
+    if (cameraTargetContext === 'borrower') {
+      return borrowers.find(b => b.idNumber === cameraTargetId)?.profilePhoto;
+    }
+    if (userRole === UserRole.BORROWER) {
+      return currentBorrowerAccount?.profilePhoto;
+    }
+    return settings.lenderPhoto;
+  };
+
+  const getCurrentNameForContext = (): string => {
+    if (cameraTargetContext === 'registration') return regForm.name || 'New Member';
+    if (cameraTargetContext === 'new_loan') return newLoanForm.borrowerName || 'Applicant';
+    if (cameraTargetContext === 'borrower') {
+      return borrowers.find(b => b.idNumber === cameraTargetId)?.name || 'Borrower';
+    }
+    if (userRole === UserRole.BORROWER) {
+      return currentBorrowerAccount?.name || 'Borrower';
+    }
+    return 'Lender';
+  };
+
+  const handleLenderAuth = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const isValid = verifyLenderPasskey(lenderPassInput, settings.adminVaultKey);
+    if (isValid) {
       setIsLenderAuthenticated(true);
+      persistLenderAuthentication();
       setUserRole(UserRole.LENDER);
-      setLenderAuthError(false);
+      setLoggedInBorrowerId(null);
       setLenderPassInput('');
-      setLoggedInBorrowerId(null); // Clear borrower session when entering admin
-      setShowToast(language === Language.XH ? 'Umnini-fana uloge ngempumelelo!' : 'Lender admin authenticated!');
+      setLenderAuthError(false);
+      setShowToast("Admin Vault Unlocked — Welcome Ovayo Monti");
     } else {
       setLenderAuthError(true);
-      setTimeout(() => setLenderAuthError(false), 2000);
+      setShowToast("Invalid master passcode. Please check and retry.");
     }
-    setTimeout(() => setShowToast(null), 3000);
+    setTimeout(() => {
+      setShowToast(null);
+      setLenderAuthError(false);
+    }, 3000);
+  };
+
+  const handleToggleRole = () => {
+    if (userRole === UserRole.LENDER) {
+      // Revoke Admin mode securely
+      clearLenderAuthentication();
+      setIsLenderAuthenticated(false);
+      setUserRole(UserRole.BORROWER);
+      setShowToast("Exited Admin Mode");
+    } else {
+      if (loggedInBorrowerId) {
+        // Log out borrower account
+        clearBorrowerLogin();
+        setLoggedInBorrowerId(null);
+        setShowToast("Logged out of borrower account");
+      } else {
+        // Request lender admin access (requires passcode)
+        setUserRole(UserRole.LENDER);
+        setIsLenderAuthenticated(false);
+      }
+    }
+    setTimeout(() => setShowToast(null), 2500);
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const found = borrowers.find(b => b.idNumber === loginId);
-    if (found) {
-      setLoggedInBorrowerId(found.idNumber);
-      setShowToast(language === Language.XH ? `Wamkelekile, ${found.name}!` : `Welcome back, ${found.name}!`);
-    } else {
-      setShowToast(language === Language.XH ? "ID ayifunyanwanga. Nceda ubhalise." : "ID not found. Please register as a new member.");
+    const clean = loginId.trim().replace(/\D/g, '');
+    const found = borrowers.find(b => b.idNumber === clean || b.idNumber === loginId.trim());
+    if (found) { 
+      setLoggedInBorrowerId(found.idNumber); 
+      persistBorrowerLogin(found.idNumber);
+      setUserRole(UserRole.BORROWER);
+      setShowToast(`Wamkelekile, ${found.name}!`); 
+    } else { 
+      setShowToast("ID not found. Please register as a borrower."); 
     }
     setTimeout(() => setShowToast(null), 3000);
   };
 
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
-    if (borrowers.find(b => b.idNumber === regForm.id)) {
-      setShowToast(language === Language.XH ? "Lo ID sele ekhona." : "This ID is already registered.");
-      setTimeout(() => setShowToast(null), 3000);
-      return;
-    }
-    const newProfile = {
-      idNumber: regForm.id,
-      name: regForm.name,
-      phone: regForm.phone,
-      address: regForm.address,
-      email: regForm.id.substring(0, 5) + '@imali.co.za'
+    const newProfile: BorrowerProfile = { 
+      idNumber: regForm.id.trim(), 
+      name: regForm.name.trim(), 
+      phone: regForm.phone.trim(), 
+      address: regForm.address.trim(), 
+      email: regForm.id.trim().substring(0, 5) + '@imali.co.za',
+      profilePhoto: regForm.profilePhoto || undefined
     };
-    setExtraProfiles(prev => [...prev, newProfile]);
+    setExtraProfiles(prev => [...prev.filter(p => p.idNumber !== newProfile.idNumber), newProfile]);
     setLoggedInBorrowerId(newProfile.idNumber);
-    setShowToast(language === Language.XH ? "Ubhalise ngempumelelo!" : "Registration successful! Welcome to the community.");
+    persistBorrowerLogin(newProfile.idNumber);
+    setUserRole(UserRole.BORROWER);
+    saveBorrowerToFirestore(newProfile).catch(err => console.warn('Cloud save deferred:', err));
+    setShowToast("Registration successful! Synced to community cloud.");
     setTimeout(() => setShowToast(null), 3000);
   };
 
   const handleCreateLoan = (e: React.FormEvent) => {
     e.preventDefault();
-    const newId = `T0${loans.length + 1}`;
+
+    if (!newLoanForm.dueDate) {
+      setShowToast("Please select a loan due date.");
+      setTimeout(() => setShowToast(null), 3000);
+      return;
+    }
+
+    const todayStart = new Date().setHours(0, 0, 0, 0);
+    const dueTime = new Date(newLoanForm.dueDate).getTime();
+    const maxAllowedTime = todayStart + 32 * 86400000;
+    if (dueTime > maxAllowedTime) {
+      setShowToast("Repayment period is strictly capped up to 1 month (maximum 31 days).");
+      setTimeout(() => setShowToast(null), 3500);
+      return;
+    }
+
     const interest = Math.round(newLoanForm.amountLoaned * (DEFAULT_INTEREST_RATE / 100));
     const newLoan: Loan = {
-      id: newId,
+      id: `T0${loans.length + 1}`,
       ...newLoanForm,
+      profilePhoto: newLoanForm.profilePhoto || undefined,
       interestRate: DEFAULT_INTEREST_RATE,
       penaltyRate: DEFAULT_PENALTY_RATE,
       totalRepayment: newLoanForm.amountLoaned + interest,
       startDate: new Date().toISOString().split('T')[0],
       status: RepaymentStatus.PENDING,
       applicationStatus: ApplicationStatus.SUBMITTED,
-      history: [
-        { date: new Date().toISOString().split('T')[0], action: 'Loan Application Submitted', amount: newLoanForm.amountLoaned }
-      ]
+      history: [{ date: new Date().toISOString().split('T')[0], action: 'Loan Application Submitted', amount: newLoanForm.amountLoaned }]
     };
     setLoans(prev => [newLoan, ...prev]);
+    saveLoanToFirestore(newLoan).catch(err => console.warn('Cloud save loan deferred:', err));
+
+    // Also ensure borrower profile exists in cloud
+    const existingBorrower = borrowers.find(b => b.idNumber === newLoan.idNumber);
+    if (!existingBorrower) {
+      const bProfile: BorrowerProfile = {
+        idNumber: newLoan.idNumber,
+        name: newLoan.borrowerName,
+        phone: newLoan.borrowerNumber,
+        address: newLoan.physicalAddress,
+        email: `${newLoan.idNumber.substring(0, 5)}@imali.co.za`,
+        profilePhoto: newLoan.profilePhoto
+      };
+      saveBorrowerToFirestore(bProfile).catch(err => console.warn('Cloud save borrower deferred:', err));
+    }
+
     setIsAddModalOpen(false);
-    setShowToast(language === Language.XH ? 'Iakhawunti yemali ivuliwe!' : 'Loan account created successfully!');
+    setShowToast("Loan account created and synced to cloud!");
     setTimeout(() => setShowToast(null), 3000);
-    // Reset form
-    setNewLoanForm({
-      borrowerName: '',
-      idNumber: '',
-      physicalAddress: '',
-      borrowerNumber: '',
-      employer: '',
-      employmentStatus: 'Full-time',
-      amountLoaned: 1000,
-      dueDate: '',
-      payoutMethod: PayoutMethod.MOBILE
-    });
   };
 
-  const handleDeleteLoan = (loanId: string) => {
+  const handleUpdateAppStatus = (loanId: string, newStatus: ApplicationStatus) => {
+    let approvedLoanTarget: Loan | null = null;
+    setLoans(prev => prev.map(l => {
+      if (l.id === loanId) {
+        const updated = { 
+          ...l, 
+          applicationStatus: newStatus, 
+          history: [...l.history, { date: new Date().toISOString().split('T')[0], action: `Application updated to ${newStatus}` }] 
+        };
+        if (newStatus === ApplicationStatus.APPROVED) {
+          approvedLoanTarget = updated;
+        }
+        saveLoanToFirestore(updated).catch(err => console.warn('Cloud update status deferred:', err));
+        return updated;
+      }
+      return l;
+    }));
+
+    // Automated WhatsApp Trigger when loan application is approved
+    if (newStatus === ApplicationStatus.APPROVED && settings.whatsappAutomation !== false && settings.whatsappAutoApproval !== false) {
+      const target = approvedLoanTarget || loans.find(l => l.id === loanId);
+      if (target) {
+        const approvedPayload: Loan = { ...target, applicationStatus: ApplicationStatus.APPROVED };
+        dispatchAutomatedNotification(
+          approvedPayload,
+          'application_approved',
+          'Application approved by lender',
+          true
+        ).then(notif => {
+          if (notif) {
+            setActiveWhatsAppNotification(notif);
+            if (settings.whatsappAutoOpen) {
+              window.open(notif.waUrl, '_blank', 'noopener,noreferrer');
+            }
+          }
+        });
+      }
+    }
+
+    setShowToast(`Status updated to ${newStatus}`);
+    setTimeout(() => setShowToast(null), 3000);
+  };
+
+  const handleMarkAsOverdue = (loanId: string) => {
+    let overdueLoanTarget: Loan | null = null;
+    setLoans(prev => prev.map(l => {
+      if (l.id === loanId) {
+        const updated: Loan = {
+          ...l,
+          status: RepaymentStatus.OVERDUE,
+          history: [...l.history, { date: new Date().toISOString().split('T')[0], action: 'Marked as Overdue by lender' }]
+        };
+        overdueLoanTarget = updated;
+        saveLoanToFirestore(updated).catch(err => console.warn('Cloud update overdue deferred:', err));
+        return updated;
+      }
+      return l;
+    }));
+
+    // Automated WhatsApp Trigger when loan status changes to Overdue
+    if (settings.whatsappAutomation !== false && settings.whatsappAutoOverdue !== false) {
+      const target = overdueLoanTarget || loans.find(l => l.id === loanId);
+      if (target) {
+        const overduePayload: Loan = { ...target, status: RepaymentStatus.OVERDUE };
+        dispatchAutomatedNotification(
+          overduePayload,
+          'overdue_reminder',
+          'Loan status changed to Overdue',
+          true
+        ).then(notif => {
+          if (notif) {
+            setActiveWhatsAppNotification(notif);
+            if (settings.whatsappAutoOpen) {
+              window.open(notif.waUrl, '_blank', 'noopener,noreferrer');
+            }
+          }
+        });
+      }
+    }
+
+    setShowToast('Loan status changed to Overdue. Automated WhatsApp reminder triggered!');
+    setTimeout(() => setShowToast(null), 3500);
+  };
+
+  const handleDeleteLoan = async (loanId: string) => {
+    // 1. Immediately remove from local state
     setLoans(prev => prev.filter(l => l.id !== loanId));
+    if (selectedLoan && selectedLoan.id === loanId) {
+      setSelectedLoan(null);
+    }
     setLoanToDelete(null);
-    setShowToast(language === Language.XH ? 'I-Loan icinyiwe!' : 'Loan record deleted!');
+    setLoanToEdit(null);
+
+    // 2. Mark as permanently deleted and purge from all local storage keys
+    markLoanAsDeleted(loanId);
+    purgeLoanFromLocalStorage(loanId);
+
+    // 3. Clear any pending WhatsApp notifications for this loan
+    setWhatsAppNotifications(prev => prev.filter(n => n.loanId !== loanId));
+
+    // 4. Delete from Firestore cloud
+    try {
+      await deleteLoanFromFirestore(loanId);
+    } catch (err) {
+      console.warn('Cloud delete loan deferred:', err);
+    }
+    setShowToast(`Loan record ${loanId} permanently deleted.`);
     setTimeout(() => setShowToast(null), 3000);
   };
 
-  const handleDeleteBorrower = (idNumber: string) => {
+  const handleSaveEditedLoan = async (updatedLoan: Loan) => {
+    setLoans(prev => prev.map(l => l.id === updatedLoan.id ? updatedLoan : l));
+    if (selectedLoan && selectedLoan.id === updatedLoan.id) {
+      setSelectedLoan(updatedLoan);
+    }
+    setLoanToEdit(null);
+    try {
+      await saveLoanToFirestore(updatedLoan);
+    } catch (err) {
+      console.warn('Cloud save loan deferred:', err);
+    }
+    setShowToast(`Loan ${updatedLoan.id} updated successfully!`);
+    setTimeout(() => setShowToast(null), 3000);
+  };
+
+  const handleDeleteBorrower = async (idNumber: string) => {
+    // 1. Remove borrower and their loans from local state
     setExtraProfiles(prev => prev.filter(p => p.idNumber !== idNumber));
+    const borrowerLoans = loans.filter(l => l.idNumber === idNumber);
     setLoans(prev => prev.filter(l => l.idNumber !== idNumber));
     setBorrowerToDelete(null);
     setSelectedBorrowerId(null);
-    setShowToast(language === Language.XH ? 'Umboleki ucinyiwe!' : 'Borrower profile deleted!');
+
+    // 2. Mark borrower and their loans as deleted and purge
+    markBorrowerAsDeleted(idNumber);
+    purgeBorrowerFromLocalStorage(idNumber);
+
+    borrowerLoans.forEach(l => {
+      markLoanAsDeleted(l.id);
+      purgeLoanFromLocalStorage(l.id);
+      deleteLoanFromFirestore(l.id).catch(() => {});
+    });
+
+    try {
+      await deleteBorrowerFromFirestore(idNumber);
+    } catch (err) {
+      console.warn('Cloud delete borrower deferred:', err);
+    }
+    setShowToast(`Borrower ${idNumber} and associated loans permanently removed.`);
     setTimeout(() => setShowToast(null), 3000);
   };
 
-  const handleWhatsAppReminder = (loan: Loan) => {
-    const penalty = calculatePenaltyDetails(loan).penalty;
-    const total = loan.totalRepayment + penalty;
-    const message = language === Language.XH 
-      ? `Molo ${loan.borrowerName}, esi sisikhumbuzo se-imali yakho engu R${total.toLocaleString()} emayihlawulwe ngomhla ka ${loan.dueDate}. Enkosi!`
-      : `Molo ${loan.borrowerName}, this is a friendly reminder for your imboleko of R${total.toLocaleString()} due on ${loan.dueDate}. Enkosi!`;
-    
-    // Clean phone number (remove spaces, ensure SA format)
-    let phone = loan.borrowerNumber.replace(/\s+/g, '');
-    if (phone.startsWith('0')) phone = '27' + phone.substring(1);
-    
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
-  };
-
-  const filteredAndSortedLoans = useMemo(() => {
-    let baseLoans = [...loans];
-    if (userRole === UserRole.BORROWER) baseLoans = baseLoans.filter(l => l.idNumber === loggedInBorrowerId);
-    const filtered = baseLoans.filter(loan => {
-      const matchesSearch = loan.borrowerName.toLowerCase().includes(searchTerm.toLowerCase()) || loan.id.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = statusFilter === 'All' || loan.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-    return [...filtered].sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime());
-  }, [loans, searchTerm, statusFilter, userRole, loggedInBorrowerId]);
-
-  const stats = useMemo(() => {
-    const relevantLoans = userRole === UserRole.LENDER ? loans : loans.filter(l => l.idNumber === loggedInBorrowerId);
-    const totalLoaned = relevantLoans.reduce((acc, l) => acc + l.amountLoaned, 0);
-    const paidCount = relevantLoans.filter(l => l.status === RepaymentStatus.PAID).length;
-    const repaymentRate = relevantLoans.length > 0 ? (paidCount / relevantLoans.length) * 100 : 0;
-    const overdueCount = relevantLoans.filter(l => l.status === RepaymentStatus.OVERDUE).length;
-    const score = userRole === UserRole.BORROWER ? (currentBorrowerAccount?.score || 600) : new Set(relevantLoans.map(l => l.idNumber)).size;
-    
-    const totalProfit = relevantLoans.reduce((acc, l) => {
-      const interest = l.totalRepayment - l.amountLoaned;
-      const penalty = calculatePenaltyDetails(l).penalty;
-      return acc + interest + penalty;
-    }, 0);
-
-    const today = new Date();
-    const nextWeek = new Date();
-    nextWeek.setDate(today.getDate() + 7);
-
-    const expectedInflow = relevantLoans.reduce((acc, l) => {
-      if (l.status === RepaymentStatus.PAID) return acc;
-      const dueDate = new Date(l.dueDate);
-      if (dueDate >= today && dueDate <= nextWeek) {
-        const penalty = calculatePenaltyDetails(l).penalty;
-        return acc + l.totalRepayment + penalty;
+  const handleSaveBorrowerProfile = async (updated: BorrowerProfile) => {
+    setExtraProfiles(prev => {
+      const exists = prev.some(p => p.idNumber === updated.idNumber);
+      if (exists) {
+        return prev.map(p => p.idNumber === updated.idNumber ? { ...p, ...updated } : p);
       }
-      return acc;
-    }, 0);
-
-    return { totalLoaned, repaymentRate, overdueCount, score, totalProfit, expectedInflow };
-  }, [loans, userRole, loggedInBorrowerId, currentBorrowerAccount]);
-
-  const chartData = useMemo(() => {
-    const relevantLoans = userRole === UserRole.LENDER ? loans : loans.filter(l => l.idNumber === loggedInBorrowerId);
-    const monthlyMap = new Map<string, number>();
-    relevantLoans.forEach(loan => {
-      const date = new Date(loan.startDate);
-      const monthLabel = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      monthlyMap.set(monthLabel, (monthlyMap.get(monthLabel) || 0) + loan.amountLoaned);
+      return [...prev, updated];
     });
-    return { monthlyData: Array.from(monthlyMap.entries()).map(([month, amount]) => ({ month, amount })).sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime()) };
-  }, [loans, userRole, loggedInBorrowerId]);
 
-  const handleRefresh = async () => {
-    await new Promise(resolve => setTimeout(resolve, 1200));
-    setShowToast(language === Language.XH ? 'Ihlaziyiwe!' : 'Data refreshed!');
+    setLoans(prev => prev.map(l => {
+      if (l.idNumber === updated.idNumber) {
+        const loanUpdated = {
+          ...l,
+          borrowerName: updated.name || l.borrowerName,
+          borrowerNumber: updated.phone || l.borrowerNumber,
+          physicalAddress: updated.address || l.physicalAddress,
+          profilePhoto: updated.profilePhoto !== undefined ? updated.profilePhoto : l.profilePhoto,
+          employer: updated.employer || l.employer,
+          employmentStatus: updated.employmentStatus || l.employmentStatus,
+        };
+        saveLoanToFirestore(loanUpdated).catch(err => console.warn('Cloud save loan sync deferred:', err));
+        return loanUpdated;
+      }
+      return l;
+    }));
+
+    await saveBorrowerToFirestore(updated);
+    setShowToast(`Profile for ${updated.name} updated and synced to cloud!`);
     setTimeout(() => setShowToast(null), 3000);
+  };
+
+  const handleIssueLoanForBorrower = (borrowerProfile: BorrowerProfile) => {
+    setNewLoanForm({
+      borrowerName: borrowerProfile.name,
+      idNumber: borrowerProfile.idNumber,
+      physicalAddress: borrowerProfile.address || '',
+      borrowerNumber: borrowerProfile.phone || '',
+      employer: borrowerProfile.employer || '',
+      employmentStatus: borrowerProfile.employmentStatus || 'Full-time',
+      amountLoaned: 1500,
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      payoutMethod: borrowerProfile.payoutMethod || PayoutMethod.MOBILE,
+      profilePhoto: borrowerProfile.profilePhoto || ''
+    });
+    setSelectedBorrowerId(null);
+    setIsAddModalOpen(true);
   };
 
   const handleMarkAsPaid = (loanId: string) => {
     setLoans(prev => prev.map(l => {
       if (l.id === loanId) {
-        const penaltyInfo = calculatePenaltyDetails(l);
-        return {
-          ...l, status: RepaymentStatus.PAID,
-          history: [...l.history, { date: new Date().toISOString().split('T')[0], action: 'Full Repayment Received', amount: l.totalRepayment + penaltyInfo.penalty }]
+        const pen = calculatePenaltyDetails(l).penalty;
+        const updated: Loan = { 
+          ...l, 
+          status: RepaymentStatus.PAID, 
+          history: [...l.history, { date: new Date().toISOString().split('T')[0], action: 'Full Repayment Received', amount: l.totalRepayment + pen }] 
         };
+        saveLoanToFirestore(updated).catch(err => console.warn('Cloud record payment deferred:', err));
+        return updated;
       }
       return l;
     }));
-    setShowToast(language === Language.XH ? 'Intlawulo ifunyenwe!' : 'Payment recorded!');
+    setShowToast("Payment recorded and synced to cloud!");
     setTimeout(() => setShowToast(null), 3000);
   };
 
-  const toggleRole = () => {
-    if (userRole === UserRole.BORROWER) {
-      setUserRole(UserRole.LENDER);
-    } else {
-      setLoggedInBorrowerId(null);
-      setIsLenderAuthenticated(false);
-      setUserRole(UserRole.BORROWER);
-      setActiveTab('dashboard');
-    }
+  const getWhatsAppLoanReminderUrl = (loan: Loan) => {
+    const raw = loan.borrowerNumber ? loan.borrowerNumber.replace(/[^0-9]/g, '') : '';
+    if (!raw) return null;
+    const formattedPhone = raw.startsWith('0') ? '27' + raw.slice(1) : raw;
+    const penalty = calculatePenaltyDetails(loan).penalty;
+    const total = loan.totalRepayment + penalty;
+    const msg = encodeURIComponent(
+      `Molo ${loan.borrowerName}, this is a payment notification regarding your imali commitment (${loan.id}). Total amount due: R${total.toLocaleString()}${penalty > 0 ? ` (includes R${penalty} overdue penalty)` : ''} by ${loan.dueDate}. Siyabonga!`
+    );
+    return `https://wa.me/${formattedPhone}?text=${msg}`;
   };
 
+  const filteredAndSortedLoans = useMemo(() => {
+    let base = userRole === UserRole.BORROWER ? loans.filter(l => l.idNumber === loggedInBorrowerId) : loans;
+    if (statusFilter !== 'all') {
+      base = base.filter(l => l.status === statusFilter);
+    }
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) {
+      return [...base].sort((a, b) => new Date(b.dueDate || 0).getTime() - new Date(a.dueDate || 0).getTime());
+    }
+    return base.filter(l => 
+      (l.borrowerName || '').toLowerCase().includes(q) || 
+      (l.id || '').toLowerCase().includes(q) ||
+      (l.idNumber || '').toLowerCase().includes(q)
+    ).sort((a, b) => new Date(b.dueDate || 0).getTime() - new Date(a.dueDate || 0).getTime());
+  }, [loans, searchTerm, statusFilter, userRole, loggedInBorrowerId]);
+
+  const stats = useMemo(() => {
+    const relevant = userRole === UserRole.LENDER ? loans : loans.filter(l => l.idNumber === loggedInBorrowerId);
+    const totalLoaned = relevant.reduce((acc, l) => acc + l.amountLoaned, 0);
+    const paidCount = relevant.filter(l => l.status === RepaymentStatus.PAID).length;
+    const repaymentRate = relevant.length > 0 ? (paidCount / relevant.length) * 100 : 0;
+    const overdueCount = relevant.filter(l => l.status === RepaymentStatus.OVERDUE).length;
+    const score = userRole === UserRole.BORROWER ? (currentBorrowerAccount?.score || 600) : new Set(relevant.map(l => l.idNumber)).size;
+    const totalProfit = relevant.reduce((acc, l) => acc + (l.totalRepayment - l.amountLoaned) + calculatePenaltyDetails(l).penalty, 0);
+    return { totalLoaned, repaymentRate, overdueCount, score, totalProfit };
+  }, [loans, userRole, loggedInBorrowerId, currentBorrowerAccount]);
+
+  const chartData = useMemo(() => {
+    const monthlyMap = new Map<string, number>();
+    const relevant = userRole === UserRole.LENDER ? loans : loans.filter(l => l.idNumber === loggedInBorrowerId);
+    relevant.forEach(loan => {
+      const label = new Date(loan.startDate).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      monthlyMap.set(label, (monthlyMap.get(label) || 0) + loan.amountLoaned);
+    });
+    return Array.from(monthlyMap.entries()).map(([month, amount]) => ({ month, amount })).sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
+  }, [loans, userRole, loggedInBorrowerId]);
+
   const StatusDot = ({ status, showLabel = false, hasPenalty = false }: { status: RepaymentStatus, showLabel?: boolean, hasPenalty?: boolean }) => {
-    const configs = {
-      [RepaymentStatus.PAID]: { color: 'bg-emerald-500 ring-emerald-100', text: language === Language.XH ? 'Ihlawulwe' : 'Paid' },
-      [RepaymentStatus.OVERDUE]: { color: 'bg-rose-500 ring-rose-100 animate-pulse', text: language === Language.XH ? 'Idlulile' : 'Overdue' },
-      [RepaymentStatus.PENDING]: { color: 'bg-amber-500 ring-amber-100', text: language === Language.XH ? 'Isalindile' : 'Pending' },
-      [RepaymentStatus.DEFAULTED]: { color: 'bg-gray-400 ring-gray-100', text: language === Language.XH ? 'Ayihlawulwanga' : 'Defaulted' },
+    const colors = { 
+      [RepaymentStatus.PAID]: 'bg-emerald-500', 
+      [RepaymentStatus.OVERDUE]: 'bg-rose-500 animate-pulse', 
+      [RepaymentStatus.PENDING]: 'bg-amber-500', 
+      [RepaymentStatus.DEFAULTED]: 'bg-gray-400' 
     };
-    const current = configs[status];
+    const labels = {
+      [RepaymentStatus.PAID]: 'Settled',
+      [RepaymentStatus.OVERDUE]: 'Overdue',
+      [RepaymentStatus.PENDING]: 'Active',
+      [RepaymentStatus.DEFAULTED]: 'Defaulted'
+    };
     return (
-      <div className="flex items-center gap-2">
-        <div className="relative">
-          <div className={`w-3.5 h-3.5 rounded-full ${current.color} ring-4`} />
-          {hasPenalty && (
-            <div className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full border border-white animate-bounce" />
-          )}
+      <div className="flex items-center gap-1.5">
+        <div className={`w-2.5 h-2.5 rounded-full ${colors[status]} ring-2 ring-white shadow-sm relative shrink-0`}>
+          {hasPenalty && <div className="absolute -top-1 -right-1 w-2 h-2 bg-rose-600 rounded-full border border-white" />}
         </div>
-        {showLabel && (
-           <div className="flex items-center gap-1.5">
-             <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">{current.text}</span>
-             {hasPenalty && (
-               <span className="bg-amber-100 text-amber-600 text-[8px] font-black px-1.5 py-0.5 rounded uppercase flex items-center gap-0.5 shadow-sm border border-amber-200">
-                 <AlertTriangle size={8} className="animate-pulse" /> Penalty
-               </span>
-             )}
-           </div>
+        {showLabel && <span className="text-[10px] font-black uppercase tracking-wider text-gray-600">{labels[status] || status}</span>}
+      </div>
+    );
+  };
+
+  const SettingRow = ({ title, description, icon: Icon, active, onToggle }: any) => (
+    <div className="flex items-center justify-between p-5 sm:p-6 bg-white rounded-2xl sm:rounded-[24px] border border-gray-100 shadow-sm hover:border-indigo-100 transition-all">
+      <div className="flex items-start gap-3 sm:gap-4">
+        <div className={`p-2.5 sm:p-3 rounded-xl ${active ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-50 text-gray-400'}`}><Icon size={20} /></div>
+        <div>
+          <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">{title}</h4>
+          <p className="text-[11px] text-gray-500 font-medium">{description}</p>
+        </div>
+      </div>
+      <button onClick={onToggle} className={`w-12 h-6 rounded-full p-1 transition-all ${active ? 'bg-indigo-600' : 'bg-gray-200'}`}><div className={`w-4 h-4 rounded-full bg-white transition-all ${active ? 'translate-x-6' : 'translate-x-0'}`} /></button>
+    </div>
+  );
+
+  const SummaryCard = ({ title, value, icon: Icon, colorClass, action, isUrgent, className = '' }: any) => {
+    if (title === 'Trust Score' && typeof value === 'number') {
+      return (
+        <div className={`bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[32px] border border-gray-100 shadow-sm relative overflow-hidden h-full flex flex-col justify-between ${className}`}>
+          <TrustScoreDisplay score={value} variant="card" showProgressBar={true} />
+        </div>
+      );
+    }
+    return (
+      <div className={`bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[32px] border border-gray-100 shadow-sm relative overflow-hidden h-full flex flex-col justify-between ${className}`}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider mb-1 truncate ${isUrgent ? 'text-rose-600' : 'text-gray-400'}`}>{title}</p>
+            <p className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight tabular-nums truncate font-heading">{value}</p>
+          </div>
+          <div className={`p-2 sm:p-2.5 rounded-xl shrink-0 ${colorClass}`}><Icon size={18} /></div>
+        </div>
+        {action && (
+          <button onClick={action} className="mt-3 w-full py-2 bg-gray-50 text-[10px] font-black uppercase tracking-wider rounded-xl hover:bg-gray-100 border border-gray-100 flex items-center justify-center gap-1.5 active:scale-95 transition-all min-h-[36px]">
+            {isSendingNotifications ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />} {t.sendNotifications}
+          </button>
         )}
       </div>
     );
   };
 
-  const SummaryCard = ({ title, value, icon: Icon, colorClass, action, isUrgent, secondaryValue }: any) => (
-    <div className="bg-white p-5 md:p-6 rounded-[32px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card group h-full flex flex-col justify-between">
-      <div className="absolute top-0 right-0 p-1 opacity-5 xhosa-pattern-sm" />
-      <div className="flex items-start justify-between relative z-10">
-        <div className="flex flex-col">
-          <p className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1 ${isUrgent ? 'text-rose-600' : 'text-gray-400'}`}>{title}</p>
-          <div className="flex items-baseline gap-2">
-            <p className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">{value}</p>
-            {secondaryValue && <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{secondaryValue}</span>}
+  const ApplicationTracker = ({ currentStatus, isAdmin, loanId }: { currentStatus?: ApplicationStatus, isAdmin: boolean, loanId: string }) => {
+    const statuses = [ApplicationStatus.SUBMITTED, ApplicationStatus.REVIEWING, ApplicationStatus.APPROVED, ApplicationStatus.REJECTED];
+    const config = (s?: ApplicationStatus) => {
+      if (s === ApplicationStatus.SUBMITTED) return { color: 'bg-blue-100 text-blue-700', icon: ClipboardList };
+      if (s === ApplicationStatus.REVIEWING) return { color: 'bg-amber-100 text-amber-700', icon: Search };
+      if (s === ApplicationStatus.APPROVED) return { color: 'bg-emerald-100 text-emerald-700', icon: ShieldCheck };
+      if (s === ApplicationStatus.REJECTED) return { color: 'bg-rose-100 text-rose-700', icon: X };
+      return { color: 'bg-gray-100 text-gray-700', icon: Info };
+    };
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between border-b pb-2"><h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Application lifecycle</h5><div className={`px-2 py-1 rounded-full text-[9px] font-black uppercase ${config(currentStatus).color}`}>{currentStatus || 'Pending'}</div></div>
+        {isAdmin ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {statuses.map(s => (
+              <button key={s} onClick={() => handleUpdateAppStatus(loanId, s)} className={`p-2 rounded-xl border text-[9px] font-black uppercase transition-all ${currentStatus === s ? config(s).color + ' border-transparent' : 'bg-white border-gray-100 text-gray-400'}`}>{s}</button>
+            ))}
           </div>
-        </div>
-        <div className={`p-2.5 rounded-xl ${colorClass} shrink-0`}><Icon size={18} /></div>
+        ) : (
+          <div className="flex items-center gap-2 py-2">
+            {[ApplicationStatus.SUBMITTED, ApplicationStatus.REVIEWING, ApplicationStatus.APPROVED].map((s, i) => (
+              <React.Fragment key={s}>
+                <div className={`flex flex-col items-center gap-1 flex-1 ${currentStatus === ApplicationStatus.REJECTED ? 'opacity-30' : ''}`}><div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${currentStatus === s ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-400'}`}>{i + 1}</div><span className="text-[8px] font-black uppercase text-gray-500">{s}</span></div>
+                {i < 2 && <div className="h-0.5 bg-gray-100 flex-1 mb-3" />}
+              </React.Fragment>
+            ))}
+          </div>
+        )}
       </div>
-      {action && (
-        <button onClick={action} className="mt-4 w-full py-2.5 bg-gray-50 text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-gray-100 transition-all border border-gray-100 flex items-center justify-center gap-2 group-hover:border-indigo-200 group-hover:text-indigo-600 text-gray-700">
-          {isSendingNotifications ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />}
-          {isSendingNotifications ? t.sendingNotifs : t.sendNotifications}
-        </button>
-      )}
-    </div>
-  );
-
-  const selectedBorrower = useMemo(() => {
-    return borrowers.find(b => b.idNumber === selectedBorrowerId) || null;
-  }, [borrowers, selectedBorrowerId]);
-
-  const toggleSetting = (key: keyof UserSettings) => {
-    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
-    setShowToast(t.updateSuccess);
-    setTimeout(() => setShowToast(null), 2000);
+    );
   };
-
-  const SettingRow = ({ title, description, icon: Icon, active, onToggle }: any) => (
-    <div className="flex items-center justify-between p-6 bg-white rounded-[24px] border border-gray-100 shadow-sm group hover:border-indigo-100 transition-all">
-      <div className="flex items-start gap-5">
-        <div className={`p-3 rounded-2xl ${active ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-50 text-gray-400'} group-hover:scale-110 transition-transform`}>
-          <Icon size={20} />
-        </div>
-        <div className="min-w-0">
-          <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">{title}</h4>
-          <p className="text-[11px] text-gray-500 font-medium leading-relaxed">{description}</p>
-        </div>
-      </div>
-      <button 
-        onClick={onToggle}
-        className={`w-14 h-8 rounded-full p-1 transition-all duration-300 relative ${active ? 'bg-indigo-600 shadow-[0_4px_12px_rgba(79,70,229,0.3)]' : 'bg-gray-100'}`}
-      >
-        <div className={`w-6 h-6 rounded-full bg-white shadow-md transition-all duration-300 flex items-center justify-center ${active ? 'translate-x-6' : 'translate-x-0'}`}>
-           {active && <Check size={12} className="text-indigo-600" />}
-        </div>
-      </button>
-    </div>
-  );
 
   return (
     <div className="relative min-h-screen overflow-x-hidden">
       {userRole === UserRole.LENDER && !isLenderAuthenticated ? (
-        <div className="fixed inset-0 z-[300] bg-gray-950 flex items-center justify-center p-6 overflow-hidden">
-          <div className="absolute inset-0 opacity-[0.05] xhosa-pattern scale-150 rotate-45" />
-          <div className={`max-w-md w-full bg-white rounded-[3rem] p-10 md:p-14 shadow-2xl relative transition-all duration-300 ${lenderAuthError ? 'shake border-4 border-rose-500' : 'border border-gray-100'}`}>
-            <div className="flex flex-col items-center text-center">
-              <div className="w-24 h-24 bg-gray-900 rounded-[2rem] flex items-center justify-center text-white shadow-2xl mb-8 -rotate-6">
-                <Shield size={40} />
-              </div>
-              <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tighter leading-none mb-4">Admin Security</h2>
-              <p className="text-sm font-medium text-gray-400 mb-10">Lender access requires enterprise authentication.</p>
-              
-              <form onSubmit={handleLenderAuth} className="w-full space-y-6">
-                <div className="space-y-2 text-left">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Access Key</label>
-                  <input 
-                    autoFocus
-                    type="password"
-                    required
-                    value={lenderPassInput}
-                    onChange={e => setLenderPassInput(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-black text-center text-2xl tracking-[0.5em] focus:ring-4 focus:ring-gray-900/5 transition-all shadow-inner text-gray-900"
-                  />
-                </div>
-                <button type="submit" className="w-full py-5 bg-gray-900 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.3em] shadow-xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-3">
-                  <span>Enter Vault</span>
-                  <ArrowRight size={18} />
-                </button>
-              </form>
-              
-              <button 
-                onClick={() => {
-                  setUserRole(UserRole.BORROWER);
-                  setLenderPassInput('');
-                }}
-                className="mt-8 text-[10px] font-black text-gray-400 hover:text-indigo-600 transition-colors uppercase tracking-widest"
-              >
-                Cancel and return to Borrower Hub
-              </button>
+        <div className="fixed inset-0 z-[300] bg-gray-950 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+          <div className="bg-white p-6 sm:p-10 rounded-[2.5rem] sm:rounded-[3rem] shadow-2xl max-w-md w-full text-center border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-900 rounded-3xl flex items-center justify-center text-white mx-auto mb-5 sm:mb-6 shadow-xl">
+              <Shield size={32} />
             </div>
+            <h2 className="text-2xl font-black uppercase mb-1 font-heading">Admin Vault</h2>
+            <p className="text-xs text-gray-500 font-medium mb-6">Enter master passkey to access lender administration.</p>
+            
+            {lenderAuthError && (
+              <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-2xl font-bold flex items-center justify-center gap-1.5">
+                <AlertCircle size={14} /> Incorrect passkey. Enter PIN (e.g. 1234) or vault key.
+              </div>
+            )}
+
+            <form onSubmit={handleLenderAuth} className="space-y-4">
+              <div>
+                <input 
+                  type="password" 
+                  inputMode="numeric"
+                  value={lenderPassInput} 
+                  onChange={e => {
+                    setLenderPassInput(e.target.value);
+                    setLenderAuthError(false);
+                  }} 
+                  className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 text-center font-black text-2xl tracking-[0.3em] focus:ring-2 focus:ring-gray-900 focus:bg-white transition-all font-mono" 
+                  placeholder="••••" 
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex flex-col gap-2.5">
+                <button 
+                  type="submit" 
+                  className="w-full min-h-[48px] py-3.5 sm:py-4 bg-gray-900 hover:bg-black text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl active:scale-98 transition-all flex items-center justify-center gap-2"
+                >
+                  <Key size={16} /> Unlock Vault
+                </button>
+              </div>
+            </form>
+
+            <button 
+              onClick={() => {
+                setUserRole(UserRole.BORROWER);
+                setIsLenderAuthenticated(false);
+                clearLenderAuthentication();
+              }} 
+              className="mt-6 text-[11px] font-black text-gray-400 hover:text-gray-600 uppercase tracking-wider block mx-auto py-2 transition-colors"
+            >
+              Return to Borrower Portal
+            </button>
           </div>
         </div>
       ) : userRole === UserRole.BORROWER && !loggedInBorrowerId ? (
-        <div className="fixed inset-0 z-[200] bg-white flex flex-col overflow-hidden">
-           {/* Clipped Background Container to prevent horizontal scroll */}
-           <div className="absolute inset-0 overflow-hidden pointer-events-none">
-             <div className="absolute inset-0 opacity-[0.03] xhosa-pattern scale-150 rotate-12" />
-           </div>
-           
-           <div className="flex flex-col h-full w-full relative animate-in fade-in duration-500">
-              <div className="bead-accent w-full h-6 flex-shrink-0" />
-              
-              {/* Scrollable Content Wrapper */}
-              <div className="flex-grow overflow-y-auto flex flex-col items-center custom-scrollbar">
-                <div className="w-full max-w-xl flex-grow flex flex-col items-center">
-                  <div className="flex flex-col items-center text-center mb-10 px-6 mt-10">
-                    <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center text-white shadow-xl rotate-3 mb-6 relative group overflow-hidden">
-                      <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <Wallet size={32} className="relative z-10" />
+        <DeviceOnboardingView
+          deviceInfo={deviceSession}
+          borrowers={borrowers}
+          onLogin={(idNumber) => {
+            setLoggedInBorrowerId(idNumber);
+            persistBorrowerLogin(idNumber);
+            setUserRole(UserRole.BORROWER);
+            setShowToast("Signed in as borrower.");
+            setTimeout(() => setShowToast(null), 3000);
+          }}
+          onRegister={(data) => {
+            const newProfile: BorrowerProfile = { 
+              idNumber: data.id.trim(), 
+              name: data.name.trim(), 
+              phone: data.phone.trim(), 
+              address: data.address.trim(), 
+              email: data.id.trim().substring(0, 5) + '@imali.co.za',
+              profilePhoto: data.profilePhoto || undefined
+            };
+            setExtraProfiles(prev => [...prev.filter(p => p.idNumber !== newProfile.idNumber), newProfile]);
+            setLoggedInBorrowerId(newProfile.idNumber);
+            persistBorrowerLogin(newProfile.idNumber);
+            setUserRole(UserRole.BORROWER);
+            saveBorrowerToFirestore(newProfile).catch(err => console.warn('Cloud save deferred:', err));
+            setShowToast("Registration successful! Welcome to imali.");
+            setTimeout(() => setShowToast(null), 3000);
+          }}
+          onOpenCalculator={() => setIsEmiCalculatorModalOpen(true)}
+          onOpenApply={() => {
+            setNewLoanForm(prev => ({
+              ...prev,
+              amountLoaned: 1500,
+              dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+            }));
+            setIsAddModalOpen(true);
+          }}
+          onOpenLenderAuth={() => {
+            setUserRole(UserRole.LENDER);
+            setIsLenderAuthenticated(false);
+          }}
+          onCapturePhoto={() => openCameraCapture('registration')}
+          capturedPhoto={regForm.profilePhoto}
+        />
+      ) : (
+        <Layout 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          language={language} 
+          setLanguage={setLanguage} 
+          userRole={userRole} 
+          toggleRole={handleToggleRole} 
+          userName={currentBorrowerAccount?.name}
+          profilePhoto={userRole === UserRole.BORROWER ? currentBorrowerAccount?.profilePhoto : settings.lenderPhoto}
+          onOpenPhotoCapture={() => openCameraCapture('current_user')}
+          onOpenDataRecovery={() => setIsDataRecoveryOpen(true)}
+          onOpenWhatsAppHub={() => setIsWhatsAppHubOpen(true)}
+          onOpenEmiCalculator={() => setIsEmiCalculatorModalOpen(true)}
+          whatsAppNotificationsCount={whatsAppNotifications.length}
+          isCloudConnected={isCloudConnected}
+        >
+          {showToast && <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] bg-gray-900 text-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-3"><CheckCircle2 size={18} className="text-emerald-400" /><span className="text-sm font-bold">{showToast}</span></div>}
+          
+          <div className="space-y-8 pb-32">
+            {/* Historical Data Recovery & WhatsApp Automation Banners */}
+            {userRole === UserRole.LENDER && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-[2rem] p-4 sm:p-5 text-white shadow-lg border border-indigo-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
+                      <Database size={22} />
                     </div>
-                    <h1 className="text-6xl font-black text-indigo-600 tracking-tighter uppercase mb-1 drop-shadow-sm">imali</h1>
-                    <p className="text-[11px] text-indigo-400 font-black uppercase tracking-[0.3em] mb-8 drop-shadow-sm">Micro-Lending</p>
-                    
-                    <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight leading-none mb-4">
-                      {language === Language.XH ? 'Uvimba Wababoleki' : 'Borrower Hub'}
-                    </h2>
-                    <p className="text-sm font-medium text-gray-500 max-w-xs md:max-w-sm">
-                      {language === Language.XH 
-                        ? 'Ngenisa iinkcukacha zakho ukuze uqhube ukhuseleke.' 
-                        : 'Access your secure community financial profile.'}
-                    </p>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-white">Live Firestore Active</h4>
+                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          {borrowers.length} Borrowers • {loans.length} Loans
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-300 mt-0.5">
+                        Deep-scan your browser storage, sync older records, or restore JSON/CSV backups.
+                      </p>
+                    </div>
                   </div>
-
-                  {/* Flush Buttons */}
-                  <div className="w-full flex bg-gray-100 p-1.5 rounded-none mb-10 border-y border-gray-200 flex-shrink-0">
-                    <button onClick={() => setAuthMode('login')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-widest transition-all ${authMode === 'login' ? 'bg-white shadow-lg text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><LogIn size={16} className="inline mr-2" /> {language === Language.XH ? 'Ngena' : 'Login'}</button>
-                    <button onClick={() => setAuthMode('register')} className={`flex-1 py-5 text-[11px] font-black uppercase tracking-widest transition-all ${authMode === 'register' ? 'bg-white shadow-lg text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}><UserPlus size={16} className="inline mr-2" /> {language === Language.XH ? 'Bhalisa' : 'Join'}</button>
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                    <button
+                      onClick={() => setIsDataRecoveryOpen(true)}
+                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 flex items-center gap-2"
+                    >
+                      <FolderSync size={15} /> Backup & Sync
+                    </button>
                   </div>
+                </div>
 
-                  <div className="w-full px-6 flex-grow">
-                    {authMode === 'login' ? (
-                      <form onSubmit={handleLogin} className="space-y-8 pb-10">
-                        <div className="space-y-3">
-                          <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest px-1">{language === Language.XH ? 'Inombolo ye-ID' : 'ID Number'}</label>
-                          <div className="relative group">
-                            <Fingerprint className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" size={24} />
-                            <input required value={loginId} onChange={e => setLoginId(e.target.value)} placeholder="920101XXXX081" className="w-full bg-gray-50 border-none rounded-2xl pl-14 pr-8 py-5 font-black text-base tracking-widest focus:ring-2 focus:ring-indigo-600 transition-all shadow-inner text-gray-900" />
-                          </div>
-                        </div>
-                        <button type="submit" className="w-full py-6 bg-[#1a1a1a] text-white rounded-[24px] font-black text-sm uppercase tracking-[0.2em] shadow-2xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-4"><span>Secure Access</span><ArrowRight size={20} /></button>
-                      </form>
-                    ) : (
-                      <form onSubmit={handleRegister} className="space-y-6 pb-10">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Full Name</label><input required value={regForm.name} onChange={e => setRegForm({...regForm, name: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                          <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">ID Number</label><input required value={regForm.id} onChange={e => setRegForm({...regForm, id: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                        </div>
-                        <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Mobile Number</label><input required value={regForm.phone} onChange={e => setRegForm({...regForm, phone: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                        <div className="space-y-2"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Physical Address</label><input required value={regForm.address} onChange={e => setRegForm({...regForm, address: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" /></div>
-                        <button type="submit" className="w-full py-6 bg-indigo-600 text-white rounded-[24px] font-black text-sm uppercase tracking-[0.2em] shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-4 mt-4"><span>Create Profile</span><ShieldCheck size={20} /></button>
-                      </form>
-                    )}
+                <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 rounded-[2rem] p-4 sm:p-5 text-white shadow-lg border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-300 shrink-0">
+                      <Smartphone size={22} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-white">WhatsApp Automation Service</h4>
+                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Auto-Triggers On
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-300 mt-0.5">
+                        Auto-reminders active for loans turning Overdue and newly Approved applications.
+                      </p>
+                    </div>
                   </div>
-
-                  <div className="mt-4 mb-12 flex flex-col items-center gap-4 flex-shrink-0">
-                    <button onClick={() => setUserRole(UserRole.LENDER)} className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-indigo-600 transition-colors py-4 px-8 rounded-full border border-transparent hover:border-gray-100">{language === Language.XH ? 'Ulawulo lwe-Admin (Lender)' : 'Lender Admin Access'}</button>
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                    <button
+                      onClick={() => setIsWhatsAppHubOpen(true)}
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 flex items-center gap-2"
+                    >
+                      <Smartphone size={15} /> Service Console ({whatsAppNotifications.length})
+                    </button>
                   </div>
                 </div>
               </div>
-              
-              <div className="bead-accent w-full h-6 opacity-40 flex-shrink-0" />
-           </div>
-        </div>
-      ) : (
-        <Layout 
-          activeTab={activeTab} setActiveTab={setActiveTab} 
-          language={language} setLanguage={setLanguage} 
-          userRole={userRole} toggleRole={toggleRole} 
-          onRefresh={handleRefresh} userName={currentBorrowerAccount?.name}
-          overdueCount={stats.overdueCount}
-        >
-          {showToast && (
-            <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] bg-gray-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 border border-white/10 relative overflow-hidden">
-              <div className="absolute inset-0 xhosa-pattern-sm opacity-[0.05]" />
-              <CheckCircle2 size={18} className="text-emerald-400 relative z-10" />
-              <span className="text-sm font-bold relative z-10">{showToast}</span>
-            </div>
-          )}
-          
-          <div className="space-y-6 md:space-y-8 pb-32 animate-in fade-in duration-500">
+            )}
             {activeTab === 'dashboard' && (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6">
-                  <SummaryCard title={userRole === UserRole.LENDER ? t.totalLoaned : "My Total Borrowed"} value={`R ${stats.totalLoaned.toLocaleString()}`} icon={Wallet} colorClass="bg-indigo-50 text-indigo-600" />
-                  
-                  {userRole === UserRole.LENDER && (
-                    <>
-                      <SummaryCard 
-                        title={language === Language.XH ? "Inzala iyonke" : "Total Profit"} 
-                        value={`R ${stats.totalProfit.toLocaleString()}`} 
-                        icon={ArrowUpRight} 
-                        colorClass="bg-emerald-50 text-emerald-600"
-                        secondaryValue="Expected"
-                      />
-                      <SummaryCard 
-                        title={language === Language.XH ? "Imali Engenayo (7 Days)" : "Expected Inflow"} 
-                        value={`R ${stats.expectedInflow.toLocaleString()}`} 
-                        icon={CalendarClock} 
-                        colorClass="bg-indigo-50 text-indigo-600"
-                        secondaryValue="Next 7 Days"
-                      />
-                    </>
-                  )}
-
-                  <SummaryCard title={userRole === UserRole.LENDER ? t.repaymentRate : "My Repayment Rate"} value={`${stats.repaymentRate.toFixed(1)}%`} icon={TrendingUp} colorClass="bg-emerald-50 text-emerald-600" />
-                  <SummaryCard title={userRole === UserRole.LENDER ? t.overdue : "Pending Dues"} value={stats.overdueCount} icon={AlertCircle} colorClass="bg-rose-50 text-rose-600" isUrgent={stats.overdueCount > 0} action={userRole === UserRole.LENDER && stats.overdueCount > 0 ? () => handleSendNotifications() : null} />
-                  <SummaryCard title={userRole === UserRole.LENDER ? (language === Language.EN ? 'Network Trust' : 'Intembeko') : "My Trust Score"} value={stats.score} icon={userRole === UserRole.LENDER ? Users : Zap} colorClass="bg-indigo-50 text-indigo-600" />
-                </div>
-
-                {userRole === UserRole.BORROWER && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 mt-6 md:mt-8">
-                    <div 
-                      className="p-6 md:p-10 rounded-[2.5rem] md:rounded-[48px] text-white shadow-2xl relative overflow-hidden group min-h-[460px] md:min-h-[520px] flex flex-col justify-between transition-all duration-700 bg-cover bg-center"
-                      style={{ backgroundImage: "url('https://westharlem.art/wp-content/uploads/2021/02/gum-front-page-website-2.jpg')" }}
-                    >
-                      <div className="absolute inset-0 bg-emerald-900/40 backdrop-blur-[1px] transition-colors duration-700" />
-                      
-                      <div className="relative z-10 flex flex-col gap-6">
-                        <div className="flex items-center justify-between">
-                          <div className="px-4 py-2 bg-black/30 backdrop-blur-xl rounded-full text-[10px] font-black uppercase tracking-[0.2em] border border-white/20 shadow-lg flex items-center gap-2.5 overflow-hidden">
-                            {detectedCity ? (
-                              <>
-                                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                                <Navigation size={10} className="text-white/80" /> 
-                                <span className="truncate max-w-[140px] font-black">{detectedCity} (Live)</span>
-                              </>
-                            ) : (
-                              <>
-                                <div className={`w-2 h-2 rounded-full ${isLocating ? 'bg-amber-400 animate-spin' : 'bg-gray-400'}`} />
-                                <MapPin size={10} className="text-white/80" /> 
-                                {isLocating ? 'Locating...' : 'East London'}
-                              </>
-                            )}
-                          </div>
+                {userRole === UserRole.BORROWER && currentBorrowerAccount && (
+                  <div className="bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 rounded-[2.5rem] p-6 sm:p-8 text-white shadow-xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="flex flex-col sm:flex-row items-center gap-5 z-10 text-center sm:text-left">
+                      <div className="relative group">
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-4 border-white/20 bg-indigo-800 flex items-center justify-center shadow-2xl">
+                          {currentBorrowerAccount.profilePhoto ? (
+                            <img src={currentBorrowerAccount.profilePhoto} alt={currentBorrowerAccount.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-3xl font-black">{currentBorrowerAccount.name[0]}</span>
+                          )}
                         </div>
-
-                        <div className="grid grid-cols-3 gap-3">
-                          {[
-                            { icon: Thermometer, val: '24°', label: 'Temp' },
-                            { icon: Wind, val: '12km/h', label: 'Wind' },
-                            { icon: Droplets, val: '42%', label: 'Humid' }
-                          ].map((item, idx) => (
-                            <div key={idx} className="bg-black/30 backdrop-blur-md rounded-3xl p-4 border border-white/10 hover:bg-black/40 transition-all">
-                              <item.icon size={14} className="text-white/60 mb-2" />
-                              <p className="text-sm font-black tracking-tight">{item.val}</p>
-                              <p className="text-[8px] font-black uppercase tracking-widest text-white/60">{item.label}</p>
-                            </div>
-                          ))}
-                        </div>
+                        <button
+                          onClick={() => openCameraCapture('current_user')}
+                          className="absolute -bottom-1 -right-1 bg-indigo-500 hover:bg-indigo-400 text-white p-2.5 rounded-full shadow-lg transition-transform active:scale-90"
+                          title="Take or update photo using camera"
+                        >
+                          <Camera size={16} />
+                        </button>
                       </div>
-
-                      <div className="relative z-10 space-y-6">
-                        <div className="space-y-2">
-                          <div className="inline-flex items-center gap-2 px-3 py-1 bg-white text-emerald-950 rounded-full text-[8px] font-black uppercase tracking-[0.2em] shadow-lg">
-                            <Zap size={10} fill="currentColor" /> High Growth Potential
-                          </div>
-                          <h3 className="text-3xl md:text-5xl font-black uppercase tracking-tighter leading-[0.9] drop-shadow-2xl text-white">Unlock Your <br />Financial Flow</h3>
+                      <div>
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1">
+                          <h2 className="text-2xl font-black uppercase tracking-tight">{currentBorrowerAccount.name}</h2>
+                          {currentBorrowerAccount.profilePhoto ? (
+                            <span className="bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[10px] font-black uppercase px-2.5 py-1 rounded-full flex items-center gap-1">
+                              <CheckCircle2 size={12} /> Photo Verified
+                            </span>
+                          ) : (
+                            <span className="bg-amber-500/20 border border-amber-400/30 text-amber-300 text-[10px] font-black uppercase px-2.5 py-1 rounded-full flex items-center gap-1">
+                              <AlertCircle size={12} /> Photo Pending
+                            </span>
+                          )}
                         </div>
-                        <button onClick={() => setIsAddModalOpen(true)} className="bg-white text-emerald-950 w-full py-5 rounded-[28px] font-black text-xs md:text-sm uppercase tracking-widest shadow-[0_20px_50px_rgba(0,0,0,0.3)] hover:bg-emerald-50 active:scale-[0.98] transition-all flex items-center justify-center gap-4 group/btn overflow-hidden relative">
-                           <span className="relative z-10">Start Fast Application</span>
-                           <ArrowRight size={18} className="group-hover/btn:translate-x-2 transition-transform relative z-10" />
+                        <p className="text-xs text-indigo-200/80 font-bold mb-3">ID: {currentBorrowerAccount.idNumber} • {currentBorrowerAccount.phone || 'No phone recorded'}</p>
+                        <button
+                          onClick={() => openCameraCapture('current_user')}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-xs font-black uppercase tracking-wider transition-all backdrop-blur-md"
+                        >
+                          <Camera size={14} />
+                          {currentBorrowerAccount.profilePhoto ? 'Update Photo with Camera' : 'Capture Profile Photo (Camera)'}
                         </button>
                       </div>
                     </div>
-
-                    <div className="bg-white p-6 md:p-10 rounded-[2.5rem] md:rounded-[48px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card flex flex-col justify-between">
-                      <div className="relative z-10">
-                         <div className="flex items-center justify-between mb-8">
-                           <div className="w-16 h-16 md:w-20 md:h-20 rounded-3xl bg-[#1a1a1a] flex items-center justify-center text-white shadow-2xl rotate-3"><UserCircle size={32} className="md:w-10 h-10" /></div>
-                           <div className="text-right">
-                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Rating</p>
-                              {currentBorrowerAccount && (
-                                <div className={`px-4 py-1.5 ${getScoreRating(currentBorrowerAccount.score).bg} ${getScoreRating(currentBorrowerAccount.score).color} rounded-full text-[10px] font-black uppercase tracking-widest border ${getScoreRating(currentBorrowerAccount.score).border}`}>{getScoreRating(currentBorrowerAccount.score).label} ({getScoreRating(currentBorrowerAccount.score).rating})</div>
-                              )}
-                           </div>
-                         </div>
-                         <div className="space-y-2 mb-8">
-                           <h3 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight leading-none">Member Dashboard</h3>
-                           <p className="text-[10px] text-indigo-600 font-black uppercase tracking-[0.3em]">Trust Score: <span className="text-lg">{stats.score}</span> / 850</p>
-                         </div>
-                         <p className="text-xs md:text-sm text-gray-500 font-medium mb-10 leading-relaxed max-w-xs">Access your historical motif, adjust your payout preferences, and monitor your trust score in real-time.</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 relative z-10">
-                         <button onClick={() => setActiveTab('loans')} className="bg-gray-50 text-gray-900 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-gray-100 hover:bg-gray-100 transition-all flex items-center justify-center gap-2"><History size={14} /> History</button>
-                         <button onClick={() => setSelectedBorrowerId(loggedInBorrowerId)} className="bg-[#1a1a1a] text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2"><Eye size={14} /> Profile</button>
+                    <div className="bg-white/5 border border-white/10 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-center gap-6 z-10 w-full sm:w-auto">
+                      <TrustScoreDisplay
+                        score={currentBorrowerAccount.score}
+                        variant="hero"
+                        showProgressBar={true}
+                        showMinMax={true}
+                        className="w-full sm:w-64"
+                      />
+                      <div className="hidden sm:block h-16 w-px bg-white/10" />
+                      <div className="text-center sm:text-left min-w-[70px]">
+                        <p className="text-[10px] uppercase font-black tracking-widest text-indigo-300 mb-1">Total Loans</p>
+                        <p className="text-2xl sm:text-3xl font-black text-white">{currentBorrowerAccount.loans.length}</p>
+                        <p className="text-[9px] font-bold text-indigo-200/60 mt-0.5">Commitments</p>
                       </div>
                     </div>
                   </div>
                 )}
 
-                <div className="mt-6 md:mt-8">
-                  <div className="bg-white p-6 md:p-8 rounded-[2.5rem] md:rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card min-h-[350px] md:min-h-[400px]">
-                    <div className="flex items-center gap-3 mb-6 md:mb-8">
-                      <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl"><BarChart3 size={20} /></div>
-                      <h3 className="text-lg md:text-xl font-black text-gray-900 uppercase tracking-tight">{userRole === UserRole.LENDER ? 'Portfolio Activity' : 'Disbursement History'}</h3>
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-5">
+                  <SummaryCard title="Total Loaned" value={`R ${stats.totalLoaned.toLocaleString()}`} icon={Wallet} colorClass="bg-indigo-50 text-indigo-600" />
+                  <SummaryCard title="Repayment Rate" value={`${stats.repaymentRate.toFixed(1)}%`} icon={TrendingUp} colorClass="bg-emerald-50 text-emerald-600" />
+                  <SummaryCard title="Overdue Loans" value={stats.overdueCount} icon={AlertCircle} colorClass="bg-rose-50 text-rose-600" isUrgent={stats.overdueCount > 0} action={userRole === UserRole.LENDER && stats.overdueCount > 0 ? handleSendNotifications : null} />
+                  <SummaryCard title={userRole === UserRole.LENDER ? 'Network Size' : 'Trust Score'} value={stats.score} icon={userRole === UserRole.LENDER ? Users : Zap} colorClass="bg-indigo-50 text-indigo-600" />
+                  {userRole === UserRole.LENDER && (
+                    <SummaryCard 
+                      className="col-span-2 lg:col-span-1" 
+                      title="Projected Revenue" 
+                      value={`R ${stats.totalProfit.toLocaleString()}`} 
+                      icon={ArrowUpRight} 
+                      colorClass="bg-emerald-50 text-emerald-600" 
+                    />
+                  )}
+                </div>
+
+                {/* Simplified Loan Simulation Tool for Borrowers */}
+                {userRole === UserRole.BORROWER && (
+                  <div className="space-y-4">
+                    <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 rounded-3xl p-4 sm:p-5 text-white shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-indigo-500/25">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-2xl bg-amber-400/15 border border-amber-400/30 flex items-center justify-center text-amber-300 shrink-0">
+                          <Calculator size={18} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-xs sm:text-sm font-black uppercase text-white tracking-wide">
+                              Loan EMI Calculator & Penalty Structure
+                            </h4>
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              5%/wk Cap
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-300 mt-0.5">
+                            Adjust amount and repayment period to see weekly or monthly installments and late fee policies.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsEmiCalculatorModalOpen(true)}
+                        className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md active:scale-95 shrink-0"
+                      >
+                        <span>Open EMI Calculator</span>
+                        <ArrowRight size={13} />
+                      </button>
                     </div>
-                    <div className="h-[250px] md:h-[300px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={chartData.monthlyData}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f1f1" />
-                          <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} />
-                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} />
-                          <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', fontWeight: 'bold' }} />
-                          <Bar dataKey="amount" fill="#4f46e5" radius={[6, 6, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
+
+                    <LoanSimulationTool
+                    borrower={currentBorrowerAccount}
+                    interestRate={DEFAULT_INTEREST_RATE}
+                    onApply={(amount, termWeeks, dueDate) => {
+                      if (currentBorrowerAccount) {
+                        setNewLoanForm({
+                          borrowerName: currentBorrowerAccount.name,
+                          idNumber: currentBorrowerAccount.idNumber,
+                          physicalAddress: currentBorrowerAccount.address || '',
+                          borrowerNumber: currentBorrowerAccount.phone || '',
+                          employer: currentBorrowerAccount.employer || '',
+                          employmentStatus: currentBorrowerAccount.employmentStatus || 'Full-time',
+                          amountLoaned: amount,
+                          dueDate: dueDate,
+                          payoutMethod: currentBorrowerAccount.payoutMethod || PayoutMethod.MOBILE,
+                          profilePhoto: currentBorrowerAccount.profilePhoto || ''
+                        });
+                      } else {
+                        setNewLoanForm(prev => ({
+                          ...prev,
+                          amountLoaned: amount,
+                          dueDate: dueDate
+                        }));
+                      }
+                      setIsAddModalOpen(true);
+                    }}
+                  />
                   </div>
+                )}
+
+                <div className="bg-white p-5 sm:p-8 rounded-[2rem] sm:rounded-[40px] border border-gray-100 shadow-sm h-[280px] sm:h-[350px]">
+                  <div className="flex items-center justify-between mb-4 sm:mb-6">
+                    <h3 className="text-base sm:text-lg font-black uppercase tracking-tight font-heading">Disbursement Activity</h3>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Monthly Trend</span>
+                  </div>
+                  <ResponsiveContainer width="100%" height="80%">
+                    <BarChart data={chartData}>
+                      <XAxis dataKey="month" hide />
+                      <YAxis hide />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: '#0f172a', 
+                          borderRadius: '16px', 
+                          border: 'none', 
+                          color: '#fff',
+                          fontWeight: 800,
+                          fontSize: '12px'
+                        }} 
+                      />
+                      <Bar dataKey="amount" fill="#4f46e5" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </>
             )}
-
-            {activeTab === 'loans' && (
-              <div className="bg-white rounded-[2rem] md:rounded-[40px] border border-gray-100 shadow-sm overflow-hidden relative">
-                <div className="p-6 md:p-8 border-b border-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 relative z-10 bg-gray-50/20">
-                   <div className="relative w-full md:w-80 group">
-                     <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-indigo-600 transition-colors" />
-                     <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder={t.search} className="w-full pl-12 pr-6 py-3 bg-white border-none rounded-xl md:rounded-2xl focus:ring-2 focus:ring-indigo-600 transition-all text-sm font-medium shadow-sm text-gray-900" />
-                   </div>
-                   <div className="flex flex-wrap gap-2">
-                     <button onClick={() => setIsAddModalOpen(true)} className="flex-1 md:flex-none bg-[#1a1a1a] text-white px-6 md:px-8 py-3 rounded-xl md:rounded-2xl font-black text-xs md:text-sm uppercase tracking-widest shadow-xl hover:bg-black active:scale-95 transition-all flex items-center justify-center gap-2"><Plus size={18} /> {userRole === UserRole.LENDER ? 'New Account' : 'Request Loan'}</button>
-                   </div>
-                </div>
-                
-                <div className="md:hidden divide-y divide-gray-50">
-                  {filteredAndSortedLoans.map((loan) => {
-                    const penaltyInfo = calculatePenaltyDetails(loan);
-                    return (
-                      <div key={loan.id} className="p-6 active:bg-gray-50 transition-colors flex justify-between items-center group">
-                        <div onClick={() => setSelectedLoan(loan)} className="space-y-2 flex-1 cursor-pointer">
-                          <div className="flex items-center gap-2">
-                            <div className="bg-indigo-600 text-white text-[8px] font-black px-2 py-0.5 rounded shadow-sm">{loan.id}</div>
-                            {penaltyInfo.penalty > 0 && (
-                              <div className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                              </div>
-                            )}
-                            <StatusDot status={loan.status} hasPenalty={penaltyInfo.penalty > 0} />
-                          </div>
-                          <p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p>
-                          <p className="text-[10px] font-bold text-gray-400 font-mono">DUE: {loan.dueDate}</p>
-                          <div className="mt-1 flex items-center gap-2">
-                             <p className="text-[10px] font-black text-indigo-600">TOTAL DUE: R {(loan.totalRepayment + penaltyInfo.penalty).toLocaleString()}</p>
-                             {penaltyInfo.penalty > 0 && (
-                               <span className="bg-amber-100 text-amber-600 text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-1">
-                                 <AlertTriangle size={8} /> Penalty Applied
-                               </span>
-                             )}
-                          </div>
-                        </div>
-                        <div className="text-right flex flex-col items-end gap-4">
-                          <p className="text-sm font-black text-gray-900">R {loan.amountLoaned.toLocaleString()}</p>
-                          <div className="flex gap-2 items-center">
-                            {userRole === UserRole.LENDER && loan.status !== RepaymentStatus.PAID && (
-                              <button onClick={(e) => { e.stopPropagation(); handleMarkAsPaid(loan.id); }} className="p-2.5 bg-white text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all border border-gray-100 shadow-sm" aria-label="Mark as Paid">
-                                <CheckCircle2 size={16} />
-                              </button>
-                            )}
-                            {userRole === UserRole.LENDER && (
-                              <button onClick={(e) => { e.stopPropagation(); handleWhatsAppReminder(loan); }} className="p-2.5 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm" aria-label="Send WhatsApp Reminder">
-                                <MessageCircle size={16} />
-                              </button>
-                            )}
-                            {userRole === UserRole.LENDER && (
-                              <button onClick={(e) => { e.stopPropagation(); setLoanToDelete(loan); }} className="p-2.5 bg-white text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-gray-100 shadow-sm" aria-label="Delete Loan">
-                                <Trash2 size={16} />
-                              </button>
-                            )}
-                            <ChevronRight onClick={() => setSelectedLoan(loan)} size={16} className="text-gray-300 group-active:text-indigo-600 cursor-pointer" />
-                          </div>
-                        </div>
+            {activeTab === 'borrowers' && (
+              userRole === UserRole.BORROWER ? (
+                currentBorrowerAccount ? (
+                  <BorrowerSelfProfileView
+                    borrower={currentBorrowerAccount}
+                    onSaveProfile={handleSaveBorrowerProfile}
+                    onOpenPhotoCapture={() => openCameraCapture('current_user')}
+                    onApplyForLoan={() => {
+                      setNewLoanForm({
+                        borrowerName: currentBorrowerAccount.name,
+                        idNumber: currentBorrowerAccount.idNumber,
+                        physicalAddress: currentBorrowerAccount.address || '',
+                        borrowerNumber: currentBorrowerAccount.phone || '',
+                        employer: currentBorrowerAccount.employer || '',
+                        employmentStatus: currentBorrowerAccount.employmentStatus || 'Full-time',
+                        amountLoaned: 1500,
+                        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                        payoutMethod: currentBorrowerAccount.payoutMethod || PayoutMethod.MOBILE,
+                        profilePhoto: currentBorrowerAccount.profilePhoto || ''
+                      });
+                      setIsAddModalOpen(true);
+                    }}
+                  />
+                ) : (
+                  <div className="bg-white rounded-[32px] border border-gray-100 p-12 text-center max-w-lg mx-auto shadow-sm">
+                    <UserCircle size={48} className="mx-auto text-gray-300 mb-3" />
+                    <h3 className="text-lg font-black uppercase text-gray-800">Borrower Account Not Found</h3>
+                    <p className="text-xs text-gray-400 mt-1">Please sign out and log in with your valid South African ID number.</p>
+                  </div>
+                )
+              ) : (
+                <div className="space-y-6">
+                  {/* Top Header Card */}
+                  <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm p-6 sm:p-8 flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Users size={20} className="text-indigo-600" />
+                        <h3 className="text-xl sm:text-2xl font-black uppercase text-gray-900 tracking-tight">Verified Borrower Network</h3>
                       </div>
-                    );
-                  })}
+                      <p className="text-xs text-gray-500 font-medium">Manage member records, review credit health scores, audit KYC, and issue microloans.</p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                      {/* Search */}
+                      <div className="relative flex-1 sm:w-72">
+                        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input
+                          value={searchTerm}
+                          onChange={e => setSearchTerm(e.target.value)}
+                          className="w-full pl-11 pr-8 py-3 bg-gray-50 border border-transparent focus:border-indigo-200 focus:bg-white rounded-2xl font-medium text-xs transition-all"
+                          placeholder="Search name, ID, phone..."
+                        />
+                        {searchTerm && (
+                          <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Sort Dropdown */}
+                      <div className="relative flex items-center gap-1.5 bg-gray-50 border border-gray-100 px-3 py-2.5 rounded-2xl text-xs font-bold text-gray-700">
+                        <ArrowUpDown size={14} className="text-gray-400" />
+                        <select
+                          value={borrowerSort}
+                          onChange={e => setBorrowerSort(e.target.value as any)}
+                          className="bg-transparent border-none text-xs font-black uppercase focus:ring-0 cursor-pointer pr-2"
+                        >
+                          <option value="score_desc">Highest Trust</option>
+                          <option value="score_asc">Lowest Trust</option>
+                          <option value="borrowed_desc">Most Borrowed</option>
+                          <option value="name_asc">Name (A-Z)</option>
+                        </select>
+                      </div>
+
+                      {/* Add Member Button */}
+                      <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="px-5 py-3 bg-gray-900 hover:bg-black text-white text-xs font-black uppercase tracking-wider rounded-2xl flex items-center gap-2 shadow-md transition-all active:scale-95"
+                      >
+                        <Plus size={16} /> New Member
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Network Statistics Ribbon */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white p-5 rounded-[28px] border border-gray-100 shadow-sm flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Total Borrowers</p>
+                        <p className="text-2xl font-black text-gray-900 mt-0.5">{borrowerNetworkStats.total}</p>
+                      </div>
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">
+                        <Users size={20} />
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-[28px] border border-gray-100 shadow-sm flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Active Borrowers</p>
+                        <p className="text-2xl font-black text-indigo-600 mt-0.5">{borrowerNetworkStats.withActiveDebt}</p>
+                      </div>
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">
+                        <Wallet size={20} />
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-[28px] border border-gray-100 shadow-sm flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Clean Standing Rate</p>
+                        <p className="text-2xl font-black text-emerald-600 mt-0.5">{borrowerNetworkStats.cleanRate.toFixed(0)}%</p>
+                      </div>
+                      <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black">
+                        <ShieldCheck size={20} />
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-[28px] border border-gray-100 shadow-sm flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-gray-400">Avg Community Score</p>
+                        <p className="text-2xl font-black text-purple-600 mt-0.5">{borrowerNetworkStats.avgScore}</p>
+                      </div>
+                      <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-black">
+                        <Star size={20} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                    <span className="text-xs font-black uppercase text-gray-400 flex items-center gap-1.5 mr-1 shrink-0">
+                      <Filter size={13} /> Filter:
+                    </span>
+                    {[
+                      { id: 'all', label: 'All Borrowers', count: borrowers.length },
+                      { id: 'active', label: 'Active Loans', count: borrowers.filter(b => b.loans.some((l: Loan) => l.status === RepaymentStatus.PENDING || l.status === RepaymentStatus.OVERDUE)).length },
+                      { id: 'debt_free', label: 'Debt-Free', count: borrowers.filter(b => !b.loans.some((l: Loan) => l.status === RepaymentStatus.PENDING || l.status === RepaymentStatus.OVERDUE)).length },
+                      { id: 'overdue', label: 'Overdue Risk', count: borrowers.filter(b => b.loans.some((l: Loan) => l.status === RepaymentStatus.OVERDUE)).length },
+                      { id: 'high_trust', label: 'Top Tier (700+)', count: borrowers.filter(b => b.score >= 700).length },
+                      { id: 'kyc_pending', label: 'KYC Pending', count: borrowers.filter(b => !b.kycVerified).length },
+                    ].map(pill => (
+                      <button
+                        key={pill.id}
+                        onClick={() => setBorrowerFilter(pill.id as any)}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap transition-all flex items-center gap-2 ${
+                          borrowerFilter === pill.id
+                            ? 'bg-indigo-600 text-white shadow-md'
+                            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-100'
+                        }`}
+                      >
+                        <span>{pill.label}</span>
+                        <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${borrowerFilter === pill.id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                          {pill.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Borrowers Grid */}
+                  {filteredAndSortedBorrowers.length === 0 ? (
+                    <div className="bg-white rounded-[32px] border border-gray-100 p-12 text-center shadow-sm">
+                      <Users size={48} className="mx-auto text-gray-300 mb-3" />
+                      <h4 className="text-base font-black uppercase text-gray-800">No Borrowers Found</h4>
+                      <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
+                        {searchTerm ? `No community members matching "${searchTerm}". Try a different name or ID.` : 'No borrowers in this category filter.'}
+                      </p>
+                      <button
+                        onClick={() => { setSearchTerm(''); setBorrowerFilter('all'); }}
+                        className="mt-4 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black uppercase hover:bg-indigo-100 transition-colors"
+                      >
+                        Reset Search & Filters
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {filteredAndSortedBorrowers.map(borrower => {
+                        const scoreInfo = getScoreRating(borrower.score);
+                        const activeLoans = borrower.loans.filter((l: Loan) => l.status === RepaymentStatus.PENDING || l.status === RepaymentStatus.OVERDUE);
+                        const hasOverdue = borrower.loans.some((l: Loan) => l.status === RepaymentStatus.OVERDUE);
+                        const totalBorrowed = borrower.loans.reduce((sum: number, l: Loan) => sum + l.amountLoaned, 0);
+                        const activeDebt = activeLoans.reduce((sum: number, l: Loan) => sum + l.totalRepayment, 0);
+
+                        return (
+                          <div
+                            key={borrower.idNumber}
+                            className="bg-white rounded-[32px] border border-gray-100 shadow-sm p-6 flex flex-col justify-between space-y-5 hover:shadow-lg transition-all relative overflow-hidden group"
+                          >
+                            {/* Card Header with Avatar & KYC */}
+                            <div className="flex items-start gap-3.5">
+                              <div className="relative group shrink-0">
+                                <div className="w-16 h-16 rounded-2xl overflow-hidden bg-indigo-50 border border-indigo-100 flex items-center justify-center font-black text-indigo-600 text-xl shadow-inner">
+                                  {borrower.profilePhoto ? (
+                                    <img src={borrower.profilePhoto} alt={borrower.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <span>{borrower.name[0]}</span>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => openCameraCapture('borrower', borrower.idNumber)}
+                                  className="absolute -bottom-1 -right-1 bg-indigo-600 hover:bg-indigo-700 text-white p-1.5 rounded-full shadow-md transition-transform active:scale-90"
+                                  title="Capture/update photo with camera"
+                                >
+                                  <Camera size={12} />
+                                </button>
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-1 mb-1">
+                                  <h4 className="font-black text-base uppercase text-gray-900 truncate">{borrower.name}</h4>
+                                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${scoreInfo.bg} ${scoreInfo.color} border ${scoreInfo.border} shrink-0`}>
+                                    {scoreInfo.rating}
+                                  </span>
+                                </div>
+
+                                <p className="text-[11px] text-gray-400 font-mono font-medium truncate">ID: {borrower.idNumber}</p>
+                                <p className="text-[11px] text-gray-600 font-medium truncate mt-0.5">📞 {borrower.phone || 'No phone'}</p>
+
+                                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                                  {borrower.kycVerified ? (
+                                    <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                      <CheckCircle2 size={10} /> KYC Verified
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                                      <Clock size={10} /> KYC Pending
+                                    </span>
+                                  )}
+                                  {borrower.employmentStatus && (
+                                    <span className="text-[9px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md truncate max-w-[120px]">
+                                      {borrower.employmentStatus}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Trust Score & Progress */}
+                            <div className="bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100 space-y-2">
+                              <TrustScoreDisplay score={borrower.score} variant="compact" showProgressBar={true} />
+                              
+                              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200/60 text-xs">
+                                <div>
+                                  <p className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Active Debt</p>
+                                  <p className={`font-black text-xs ${hasOverdue ? 'text-rose-600' : activeDebt > 0 ? 'text-indigo-600' : 'text-emerald-600'}`}>
+                                    {activeDebt > 0 ? `R ${activeDebt.toLocaleString()}` : 'Debt-Free'}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Lifetime Volume</p>
+                                  <p className="font-black text-xs text-gray-800">
+                                    R {totalBorrowed.toLocaleString()} ({borrower.loans.length})
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="space-y-2 pt-2 border-t border-gray-100">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => setSelectedBorrowerId(borrower.idNumber)}
+                                  className="flex-1 py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                                >
+                                  <FileText size={14} /> View Dossier
+                                </button>
+                                <button
+                                  onClick={() => handleIssueLoanForBorrower(borrower)}
+                                  className="py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-1 transition-colors"
+                                  title="Create a new loan for this borrower"
+                                >
+                                  <Plus size={14} /> Issue Loan
+                                </button>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2 pt-1 text-xs">
+                                <button
+                                  onClick={() => openCameraCapture('borrower', borrower.idNumber)}
+                                  className="py-1.5 px-2 text-gray-500 hover:text-indigo-600 rounded-lg text-[10px] font-bold flex items-center gap-1 hover:bg-gray-50 transition-colors"
+                                >
+                                  <Camera size={12} /> Update Photo
+                                </button>
+                                <button
+                                  onClick={() => setBorrowerToDelete({ idNumber: borrower.idNumber, name: borrower.name })}
+                                  className="py-1.5 px-2 text-rose-500 hover:text-rose-700 rounded-lg text-[10px] font-bold flex items-center gap-1 hover:bg-rose-50 transition-colors"
+                                >
+                                  <Trash2 size={12} /> Remove
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            )}
+            {activeTab === 'loans' && (
+              <div className="bg-white rounded-[2rem] sm:rounded-[40px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-4 sm:p-8 border-b space-y-4">
+                  {/* Top controls: Search & Action */}
+                  <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+                    <div className="relative flex-1 max-w-md">
+                      <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input 
+                        value={searchTerm} 
+                        onChange={e => setSearchTerm(e.target.value)} 
+                        className="w-full pl-11 pr-10 py-3 bg-gray-50 border border-gray-200/80 rounded-2xl font-medium text-sm focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all" 
+                        placeholder="Search by name, ID or Txn..." 
+                      />
+                      {searchTerm && (
+                        <button 
+                          onClick={() => setSearchTerm('')} 
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded-full"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+                    {userRole === UserRole.LENDER && (
+                      <button 
+                        onClick={() => setIsAddModalOpen(true)} 
+                        className="bg-gray-900 hover:bg-indigo-600 text-white px-5 sm:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all min-h-[44px]"
+                      >
+                        <Plus size={18} /> Issue Commitment
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Filter tabs */}
+                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar momentum-scroll pt-1">
+                    {[
+                      { 
+                        id: 'all', 
+                        label: 'All Loans', 
+                        count: (userRole === UserRole.BORROWER ? loans.filter(l => l.idNumber === loggedInBorrowerId) : loans).length 
+                      },
+                      { 
+                        id: RepaymentStatus.PENDING, 
+                        label: 'Active', 
+                        count: (userRole === UserRole.BORROWER ? loans.filter(l => l.idNumber === loggedInBorrowerId) : loans).filter(l => l.status === RepaymentStatus.PENDING).length 
+                      },
+                      { 
+                        id: RepaymentStatus.OVERDUE, 
+                        label: 'Overdue', 
+                        count: (userRole === UserRole.BORROWER ? loans.filter(l => l.idNumber === loggedInBorrowerId) : loans).filter(l => l.status === RepaymentStatus.OVERDUE).length 
+                      },
+                      { 
+                        id: RepaymentStatus.PAID, 
+                        label: 'Settled', 
+                        count: (userRole === UserRole.BORROWER ? loans.filter(l => l.idNumber === loggedInBorrowerId) : loans).filter(l => l.status === RepaymentStatus.PAID).length 
+                      },
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setStatusFilter(tab.id as RepaymentStatus | 'all')}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap transition-all flex items-center gap-1.5 min-h-[38px] active:scale-95 ${
+                          statusFilter === tab.id
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${statusFilter === tab.id ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700 font-mono'}`}>
+                          {tab.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="hidden md:block overflow-x-auto relative z-10 custom-scrollbar">
+                {/* Mobile Card Stack View (< md) */}
+                <div className="block md:hidden divide-y divide-gray-100">
+                  {filteredAndSortedLoans.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400 font-medium text-sm">
+                      No commitments matching your search criteria.
+                    </div>
+                  ) : (
+                    filteredAndSortedLoans.map(loan => {
+                      const penaltyInfo = calculatePenaltyDetails(loan);
+                      const totalDue = loan.totalRepayment + penaltyInfo.penalty;
+                      const isOverdue = loan.status === RepaymentStatus.OVERDUE;
+                      const isPaid = loan.status === RepaymentStatus.PAID;
+                      const waUrl = getWhatsAppLoanReminderUrl(loan);
+
+                      return (
+                        <div key={loan.id} className="p-4 space-y-3 hover:bg-gray-50/50 transition-colors">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-black text-sm shrink-0 overflow-hidden">
+                                {loan.profilePhoto ? (
+                                  <img src={loan.profilePhoto} alt={loan.borrowerName} className="w-full h-full object-cover" />
+                                ) : (
+                                  <span>{loan.borrowerName ? loan.borrowerName[0] : 'B'}</span>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="font-black text-gray-900 text-sm uppercase tracking-tight truncate font-heading">{loan.borrowerName}</h4>
+                                <div className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium">
+                                  <span className="bg-indigo-600 text-white font-mono px-1.5 py-0.2 rounded text-[9px] font-black">{loan.id}</span>
+                                  <span>•</span>
+                                  <span className="truncate font-mono">{loan.idNumber}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="shrink-0">
+                              <StatusDot status={loan.status} showLabel hasPenalty={penaltyInfo.penalty > 0} />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2 bg-gray-50/80 p-3 rounded-2xl text-center">
+                            <div>
+                              <p className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Principal</p>
+                              <p className="text-xs font-black text-gray-900 mt-0.5 tabular-nums">R {loan.amountLoaned.toLocaleString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Total Due</p>
+                              <p className={`text-xs font-black mt-0.5 tabular-nums ${isOverdue ? 'text-rose-600' : 'text-indigo-600'}`}>
+                                R {totalDue.toLocaleString()}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Due Date</p>
+                              <p className="text-xs font-bold text-gray-700 mt-0.5 truncate">{loan.dueDate}</p>
+                            </div>
+                          </div>
+
+                          {penaltyInfo.penalty > 0 && (
+                            <div className="bg-rose-50 text-rose-700 border border-rose-100 px-3 py-1.5 rounded-xl flex items-center justify-between text-xs font-bold">
+                              <span className="flex items-center gap-1"><AlertTriangle size={13} /> {penaltyInfo.weeks} wk(s) overdue</span>
+                              <span className="font-black">+R {penaltyInfo.penalty} penalty</span>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                            <button
+                              onClick={() => setSelectedLoan(loan)}
+                              className="flex-1 min-h-[38px] py-2 px-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1 active:scale-95 transition-all"
+                            >
+                              <Eye size={13} /> Details
+                            </button>
+                            {(userRole === UserRole.LENDER || (userRole === UserRole.BORROWER && (loan.applicationStatus === ApplicationStatus.SUBMITTED || loan.applicationStatus === ApplicationStatus.REVIEWING))) && (
+                              <button
+                                onClick={() => setLoanToEdit(loan)}
+                                className="min-h-[38px] py-2 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1 active:scale-95 transition-all"
+                                title="Edit Loan Record"
+                              >
+                                <Edit3 size={13} /> Edit
+                              </button>
+                            )}
+                            {userRole === UserRole.LENDER && !isPaid && (
+                              <button
+                                onClick={() => handleMarkAsPaid(loan.id)}
+                                className="flex-1 min-h-[38px] py-2 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-all"
+                              >
+                                <Check size={13} /> Paid
+                              </button>
+                            )}
+                            {(userRole === UserRole.LENDER || (userRole === UserRole.BORROWER && (loan.applicationStatus === ApplicationStatus.SUBMITTED || loan.applicationStatus === ApplicationStatus.REVIEWING))) && (
+                              <button
+                                onClick={() => setLoanToDelete(loan)}
+                                className="min-h-[38px] p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center active:scale-95 transition-all"
+                                title="Delete Loan Record"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                            {userRole === UserRole.LENDER && waUrl && (
+                              <a
+                                href={waUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="min-h-[38px] w-9 flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl border border-emerald-200 active:scale-95 transition-all shrink-0"
+                                title="Send WhatsApp Reminder"
+                              >
+                                <Smartphone size={14} />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Desktop High-Density Table (>= md) */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left">
-                    <thead className="bg-gray-50/50 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">
+                    <thead className="bg-gray-50/60 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b">
                       <tr>
-                        <th className="px-8 py-5">Transaction ID</th>
-                        <th className="px-8 py-5">Borrower Name</th>
-                        <th className="px-8 py-5">Borrower Number</th>
-                        <th className="px-8 py-5">Amount Loaned</th>
+                        <th className="px-8 py-5">TXN ID</th>
+                        <th className="px-8 py-5">Borrower</th>
+                        <th className="px-8 py-5">Principal</th>
+                        <th className="px-8 py-5">Total Due</th>
                         <th className="px-8 py-5">Due Date</th>
-                        <th className="px-8 py-5 bg-indigo-50/50 text-indigo-600">Total Amount Due</th>
                         <th className="px-8 py-5">Status</th>
                         <th className="px-8 py-5 text-center">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {filteredAndSortedLoans.map((loan) => {
-                        const penaltyInfo = calculatePenaltyDetails(loan);
-                        return (
-                          <tr key={loan.id} className="hover:bg-gray-50/80 transition-all">
-                            <td className="px-8 py-6">
-                              <div className="flex items-center gap-2">
-                                <div className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-lg rotate-1 inline-block uppercase tracking-tighter border border-white/20">
+                      {filteredAndSortedLoans.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="px-8 py-16 text-center text-gray-400 font-medium text-sm">
+                            <div className="flex flex-col items-center justify-center gap-2">
+                              <ReceiptText size={40} className="text-gray-300" />
+                              <p className="font-black text-gray-700 uppercase text-xs tracking-wider">No Commitments Found</p>
+                              <p className="text-xs text-gray-400">
+                                {searchTerm ? `No loans matching "${searchTerm}".` : 'No commitments found matching your filter.'}
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredAndSortedLoans.map(loan => {
+                          const penalty = calculatePenaltyDetails(loan).penalty;
+                          const totalDue = loan.totalRepayment + penalty;
+                          const waUrl = getWhatsAppLoanReminderUrl(loan);
+                          return (
+                            <tr key={loan.id} className="hover:bg-gray-50/50 transition-all">
+                              <td className="px-8 py-6">
+                                <div className="bg-indigo-600 text-white text-[10px] font-black px-2.5 py-1 rounded-md inline-block font-mono">
                                   {loan.id}
                                 </div>
-                                {penaltyInfo.penalty > 0 && (
-                                  <div className="relative flex h-3 w-3" title="Penalty Active">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500 border border-white"></span>
+                              </td>
+                              <td className="px-8 py-6">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center font-black text-xs text-indigo-700 overflow-hidden">
+                                    {loan.profilePhoto ? (
+                                      <img src={loan.profilePhoto} alt={loan.borrowerName} className="w-full h-full object-cover" />
+                                    ) : (
+                                      loan.borrowerName ? loan.borrowerName[0] : 'B'
+                                    )}
                                   </div>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-8 py-6">
-                              <div className="flex flex-col">
-                                <div className="flex items-center gap-2">
-                                  <p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p>
-                                  {penaltyInfo.penalty > 0 && (
-                                    <span className="bg-amber-100 text-amber-600 text-[7px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 uppercase tracking-tighter border border-amber-200">
-                                      <AlertTriangle size={8} /> Penalty
-                                    </span>
-                                  )}
+                                  <div>
+                                    <p className="font-black text-gray-900 text-sm">{loan.borrowerName}</p>
+                                    <p className="text-xs text-gray-400 font-mono">ID: {loan.idNumber}</p>
+                                  </div>
                                 </div>
-                              </div>
+                              </td>
+                            <td className="px-8 py-6 text-sm font-black tabular-nums">R {loan.amountLoaned.toLocaleString()}</td>
+                            <td className="px-8 py-6 text-sm font-black tabular-nums text-indigo-600">
+                              R {totalDue.toLocaleString()}
+                              {penalty > 0 && <span className="text-[10px] text-rose-600 block font-bold">+R {penalty} penalty</span>}
                             </td>
-                            <td className="px-8 py-6"><p className="font-bold text-gray-500 text-xs font-mono">{loan.borrowerNumber}</p></td>
-                            <td className="px-8 py-6"><p className="font-black text-gray-900 text-sm">R {loan.amountLoaned.toLocaleString()}</p></td>
-                            <td className="px-8 py-6 text-xs font-bold text-gray-600">{loan.dueDate}</td>
-                            <td className="px-8 py-6 bg-indigo-50/30">
-                              <div className="flex flex-col">
-                                <p className="font-black text-indigo-700 font-mono text-base">R {(loan.totalRepayment + penaltyInfo.penalty).toLocaleString()}</p>
-                                {penaltyInfo.penalty > 0 ? (
-                                  <span className="text-[9px] font-black text-rose-500 uppercase tracking-tighter flex items-center gap-1">
-                                    <AlertTriangle size={8} /> R{loan.amountLoaned} + R{loan.totalRepayment - loan.amountLoaned} Int + R{penaltyInfo.penalty} Pen
-                                  </span>
-                                ) : (
-                                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">
-                                    R{loan.amountLoaned} + R{loan.totalRepayment - loan.amountLoaned} Int
-                                  </span>
-                                )}
-                              </div>
-                            </td>
+                            <td className="px-8 py-6 text-xs text-gray-500 font-bold">{loan.dueDate}</td>
                             <td className="px-8 py-6">
-                              <StatusDot status={loan.status} showLabel hasPenalty={penaltyInfo.penalty > 0} />
+                              <StatusDot status={loan.status} showLabel hasPenalty={penalty > 0} />
                             </td>
-                            <td className="px-8 py-6">
-                              <div className="flex justify-center gap-2">
+                            <td className="px-8 py-6 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
                                 <button 
                                   onClick={() => setSelectedLoan(loan)} 
-                                  className="p-3 bg-white text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm flex items-center justify-center" 
+                                  className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-xl transition-all"
                                   title="View Details"
                                 >
-                                  <Eye size={18} />
+                                  <Eye size={17} />
                                 </button>
-                                {userRole === UserRole.LENDER && (
+                                {(userRole === UserRole.LENDER || (userRole === UserRole.BORROWER && (loan.applicationStatus === ApplicationStatus.SUBMITTED || loan.applicationStatus === ApplicationStatus.REVIEWING))) && (
                                   <button 
-                                    onClick={() => handleWhatsAppReminder(loan)} 
-                                    className="p-3 bg-white text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100 shadow-sm flex items-center justify-center" 
-                                    title="WhatsApp Reminder"
+                                    onClick={() => setLoanToEdit(loan)} 
+                                    className="p-2 hover:bg-indigo-50 text-indigo-700 rounded-xl transition-all"
+                                    title="Edit Loan Record"
                                   >
-                                    <MessageCircle size={18} />
+                                    <Edit3 size={17} />
                                   </button>
                                 )}
                                 {userRole === UserRole.LENDER && loan.status !== RepaymentStatus.PAID && (
-                                  <button 
-                                    onClick={() => handleMarkAsPaid(loan.id)} 
-                                    className="p-3 bg-white text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all border border-gray-100 shadow-sm flex items-center justify-center" 
-                                    title="Mark as Paid"
+                                  <button
+                                    onClick={() => handleMarkAsPaid(loan.id)}
+                                    className="p-2 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-all"
+                                    title="Record Payment"
                                   >
-                                    <Check size={18} />
+                                    <Check size={17} />
                                   </button>
                                 )}
-                                {userRole === UserRole.LENDER && (
-                                  <button 
-                                    onClick={() => setLoanToDelete(loan)} 
-                                    className="p-3 bg-white text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-gray-100 shadow-sm flex items-center justify-center" 
-                                    title="Delete Transaction"
+                                {(userRole === UserRole.LENDER || (userRole === UserRole.BORROWER && (loan.applicationStatus === ApplicationStatus.SUBMITTED || loan.applicationStatus === ApplicationStatus.REVIEWING))) && (
+                                  <button
+                                    onClick={() => setLoanToDelete(loan)}
+                                    className="p-2 hover:bg-rose-50 text-rose-600 rounded-xl transition-all"
+                                    title={userRole === UserRole.LENDER ? "Delete Loan Record" : "Withdraw Application"}
                                   >
-                                    <Trash2 size={18} />
+                                    <Trash2 size={17} />
                                   </button>
+                                )}
+                                {userRole === UserRole.LENDER && waUrl && (
+                                  <a
+                                    href={waUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-2 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-all"
+                                    title="WhatsApp Reminder"
+                                  >
+                                    <Smartphone size={17} />
+                                  </a>
                                 )}
                               </div>
                             </td>
                           </tr>
                         );
-                      })}
+                      }))}
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
-
-            {activeTab === 'borrowers' && userRole === UserRole.LENDER && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
-                {borrowers.map((borrower) => {
-                  const rating = getScoreRating(borrower.score);
-                  return (
-                    <div key={borrower.idNumber} className="bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[40px] border border-gray-100 shadow-sm relative overflow-hidden cultural-card group hover:shadow-md transition-all">
-                      <div className="flex items-start justify-between mb-6 md:mb-8 relative z-10">
-                        <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-[24px] bg-indigo-600 flex items-center justify-center font-black text-lg md:text-xl text-white shadow-lg">{borrower.name[0]}</div>
-                        <div className="flex flex-col items-end gap-2">
-                          <div className={`px-4 py-2 rounded-2xl border font-black text-[12px] flex items-center gap-2 shadow-sm ${rating.bg} ${rating.color} ${rating.border} scale-110`}><rating.icon size={14} /><span className="opacity-60 uppercase tracking-tighter">TRUST:</span><span className="text-base">{borrower.score}</span></div>
-                          <button onClick={() => setBorrowerToDelete(borrower)} className="p-2.5 bg-rose-50 text-rose-600 rounded-xl border border-rose-100 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} /></button>
-                        </div>
-                      </div>
-                      <div className="space-y-4 md:space-y-6 relative z-10">
-                        <div><h4 className="text-lg md:text-xl font-black text-gray-900 tracking-tight leading-none">{borrower.name}</h4><div className={`${rating.bg} ${rating.color} px-2 py-0.5 rounded-lg text-[8px] font-black uppercase border ${rating.border} mt-1 inline-block`}>{rating.label} Member</div></div>
-                        <div className="space-y-1.5"><div className="flex justify-between items-center text-[8px] font-black text-gray-400 uppercase tracking-widest"><span>Risk (300)</span><span>Excellent (850)</span></div><div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ease-out ${rating.color.replace('text-', 'bg-')}`} style={{ width: `${((borrower.score - 300) / 550) * 100}%` }} /></div></div>
-                        <div className="grid grid-cols-2 gap-3 md:gap-4"><div className="bg-gray-50/50 p-3 md:p-4 rounded-2xl md:rounded-3xl border border-gray-100"><p className="text-[8px] md:text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Total</p><p className="text-xs md:text-sm font-black text-gray-900">{borrower.loans.length} Loans</p></div><div className="bg-gray-50/50 p-3 md:p-4 rounded-2xl md:rounded-3xl border border-gray-100"><p className="text-[8px] md:text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Active</p><p className="text-xs md:text-sm font-black text-indigo-600">{borrower.loans.filter(l => l.status !== RepaymentStatus.PAID).length} Active</p></div></div>
-                        <button onClick={() => setSelectedBorrowerId(borrower.idNumber)} className="w-full py-3.5 md:py-4 bg-[#1a1a1a] text-white rounded-xl md:rounded-[24px] text-[10px] md:text-xs font-black uppercase tracking-widest transition-all shadow-xl flex items-center justify-center gap-3"><Eye size={14} /> Profile Detail</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
             {activeTab === 'calculator' && (
-              <div className="max-w-6xl mx-auto animate-in slide-in-from-bottom-8 duration-700">
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg"><Calculator size={32} /></div>
-                  <div><h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">Loan Planner</h2><p className="text-gray-500 font-medium">Financial growth projections for the community.</p></div>
-                </div>
-                <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100">
-                  <div className="space-y-10">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                      <div className="space-y-6">
-                        <div className="space-y-4">
-                          <div className="flex justify-between items-end"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount to Borrow</label><span className="font-black text-2xl text-gray-900 font-mono">R {calcAmount.toLocaleString()}</span></div>
-                          <input type="range" min="200" max="25000" step="100" value={calcAmount} onChange={e => setCalcAmount(Number(e.target.value))} className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                        </div>
-                        <div className="space-y-4">
-                          <div className="flex justify-between items-end"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Interest Rate</label><span className="font-black text-xl text-gray-900 font-mono">{calcInterest}%</span></div>
-                          <input type="range" min="0" max="60" step="5" value={calcInterest} onChange={e => setCalcInterest(Number(e.target.value))} className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                        </div>
-                        <div className="space-y-4">
-                          <div className="flex justify-between items-end"><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Duration (Weeks)</label><span className="font-black text-xl text-gray-900 font-mono">{calcWeeks} Weeks</span></div>
-                          <input type="range" min="1" max="24" step="1" value={calcWeeks} onChange={e => setCalcWeeks(Number(e.target.value))} className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                        </div>
-                        <div className="space-y-4">
-                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Repayment Frequency</label>
-                          <div className="flex bg-gray-50 p-1 rounded-2xl border border-gray-100">
-                            {(['weekly', 'fortnightly', 'monthly'] as const).map(f => (
-                              <button key={f} onClick={() => setCalcFrequency(f)} className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calcFrequency === f ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-400'}`}>
-                                {f}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+              <div className="max-w-4xl mx-auto space-y-6">
+                {/* Banner to launch dedicated Loan EMI & Penalty Calculator Modal */}
+                <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-indigo-500/20">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-300 shrink-0">
+                      <Calculator size={22} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-black uppercase tracking-wider text-white">Prospective Loan EMI Calculator</h4>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          Includes Penalty Rules (5%/wk)
+                        </span>
                       </div>
-
-                      <div className="bg-[#1a1a1a] p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-between">
-                        <div className="absolute inset-0 xhosa-pattern-sm opacity-5 pointer-events-none" />
-                        <div className="relative z-10">
-                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-2">{language === Language.EN ? 'Total Repayment' : 'Iyonke emayihlawulwe'}</p>
-                          <p className="text-5xl font-black tracking-tighter leading-none mb-6">R {calcResults.total.toLocaleString()}</p>
-                          
-                          <div className="grid grid-cols-2 gap-4 mt-10">
-                            <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
-                               <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Interest</p>
-                               <p className="text-xl font-black text-indigo-400">R {calcResults.interestAmount.toLocaleString()}</p>
-                            </div>
-                            <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
-                               <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Installments</p>
-                               <p className="text-xl font-black text-white">{calcResults.numInstallments}x</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="relative z-10 pt-8 border-t border-white/10 mt-8 flex items-center justify-between">
-                          <div>
-                            <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Installment Amount</p>
-                            <p className="text-2xl font-black text-indigo-400">R {calcResults.perInstallment.toLocaleString()}</p>
-                          </div>
-                          <div className="p-3 bg-indigo-600 rounded-xl shadow-lg rotate-3">
-                            <ArrowRight size={20} />
-                          </div>
-                        </div>
-                      </div>
+                      <p className="text-xs text-gray-300 mt-0.5">
+                        Interactive modal with weekly/monthly EMI breakdown, NCR in duplum cap, and late fee simulator.
+                      </p>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsEmiCalculatorModalOpen(true)}
+                    className="w-full sm:w-auto px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all shrink-0"
+                  >
+                    <span>Launch EMI Modal</span>
+                    <ArrowRight size={14} />
+                  </button>
                 </div>
+
+                <LoanSimulationTool
+                  borrower={currentBorrowerAccount}
+                  interestRate={DEFAULT_INTEREST_RATE}
+                  onApply={(amount, termWeeks, dueDate) => {
+                    if (currentBorrowerAccount) {
+                      setNewLoanForm({
+                        borrowerName: currentBorrowerAccount.name,
+                        idNumber: currentBorrowerAccount.idNumber,
+                        physicalAddress: currentBorrowerAccount.address || '',
+                        borrowerNumber: currentBorrowerAccount.phone || '',
+                        employer: currentBorrowerAccount.employer || '',
+                        employmentStatus: currentBorrowerAccount.employmentStatus || 'Full-time',
+                        amountLoaned: amount,
+                        dueDate: dueDate,
+                        payoutMethod: currentBorrowerAccount.payoutMethod || PayoutMethod.MOBILE,
+                        profilePhoto: currentBorrowerAccount.profilePhoto || ''
+                      });
+                    } else {
+                      setNewLoanForm(prev => ({
+                        ...prev,
+                        amountLoaned: amount,
+                        dueDate: dueDate
+                      }));
+                    }
+                    setIsAddModalOpen(true);
+                  }}
+                />
               </div>
             )}
-
-            {activeTab === 'settings' && userRole === UserRole.LENDER && (
-              <div className="max-w-4xl mx-auto space-y-10 animate-in slide-in-from-bottom-8 duration-700">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-indigo-600 text-white rounded-2xl shadow-lg"><Settings size={32} /></div>
-                  <div>
-                    <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">System Motifs</h2>
-                    <p className="text-gray-500 font-medium">Configure operational triggers and communication alerts.</p>
-                  </div>
-                </div>
-
-                <div className="space-y-12">
-                   <section className="space-y-6">
-                      <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
-                        <Zap size={16} className="text-indigo-600" />
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Operational Automation</h3>
+            {activeTab === 'settings' && (
+               <div className="max-w-3xl mx-auto space-y-8">
+                  <section className="space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-2"><Database size={14} /> Cloud Database & Data Recovery</h3>
+                    <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-black text-gray-900 uppercase">Firestore Cloud Database</h4>
+                          <p className="text-xs text-gray-500">Live multi-device database for loans and borrower dossiers.</p>
+                        </div>
+                        <span className={`text-[10px] font-bold px-3 py-1 rounded-full border ${isCloudConnected ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                          {isCloudConnected ? 'Live Cloud Connected' : 'Reconnecting'}
+                        </span>
                       </div>
-                      <div className="grid grid-cols-1 gap-4">
+
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
+                          <span className="text-[10px] font-black uppercase text-gray-400">Total Borrowers</span>
+                          <p className="text-xl font-black text-gray-900">{borrowers.length}</p>
+                        </div>
+                        <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-100">
+                          <span className="text-[10px] font-black uppercase text-gray-400">Total Loans</span>
+                          <p className="text-xl font-black text-gray-900">{loans.length}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                        <button 
+                          onClick={() => setIsDataRecoveryOpen(true)}
+                          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 px-4 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
+                        >
+                          <FolderSync size={16} /> Open Data Recovery & Backup Hub
+                        </button>
+                        <button 
+                          onClick={() => downloadJSONBackup(loans, borrowers, settings)}
+                          className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-95"
+                          title="Download complete JSON database backup"
+                        >
+                          <FileText size={15} /> Export JSON
+                        </button>
+                        <button 
+                          onClick={() => downloadLoansCSV(loans)}
+                          className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all active:scale-95"
+                          title="Download CSV spreadsheet of loans"
+                        >
+                          <FileText size={15} /> Export CSV
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-2"><Key size={14} /> Security Vault</h3>
+                    <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm space-y-4">
+                      <p className="text-xs font-medium text-gray-500">Share this magic link with trusted admins to bypass the vault key screen.</p>
+                      <div className="bg-gray-50 p-4 rounded-xl font-mono text-[10px] text-gray-400 border truncate">{window.location.origin}{window.location.pathname}?vault_key={settings.adminVaultKey}</div>
+                      <div className="flex gap-3"><button onClick={handleCopyMagicLink} className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-black text-[10px] uppercase flex items-center justify-center gap-2"><Copy size={14} /> Copy Link</button><button onClick={handleRegenerateKey} className="p-3 bg-gray-50 text-gray-400 hover:text-rose-600 rounded-xl transition-all"><RefreshCw size={18} /></button></div>
+                    </div>
+                  </section>
+                  <section className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
+                        <Bell size={14} /> WhatsApp Automation & Notifications
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setIsWhatsAppHubOpen(true)}
+                        className="text-xs font-black text-emerald-600 hover:text-emerald-700 flex items-center gap-1 uppercase tracking-wider transition-colors"
+                      >
+                        <Smartphone size={13} /> Open Console
+                      </button>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm space-y-4">
+                      <div className="p-4 bg-emerald-50/70 border border-emerald-100 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                            <Smartphone size={18} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-emerald-950 uppercase">Automated WhatsApp Reminder Service</p>
+                            <p className="text-[11px] text-emerald-800 font-medium">Triggers reminders on Overdue status & application approvals.</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsWhatsAppHubOpen(true)}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm active:scale-95 shrink-0"
+                        >
+                          Service Console ({whatsAppNotifications.length})
+                        </button>
+                      </div>
+
+                      <div className="space-y-3 pt-1">
                         <SettingRow 
-                          title={t.prefOverdueAlerts} 
-                          description={t.prefOverdueDesc} 
-                          icon={AlertCircle} 
-                          active={settings.overdueAlerts} 
-                          onToggle={() => toggleSetting('overdueAlerts')} 
-                        />
-                        <SettingRow 
-                          title={t.prefSMSAuto} 
-                          description={t.prefSMSDesc} 
+                          title="WhatsApp Automation Master" 
+                          description="Enable all automated WhatsApp background triggers" 
                           icon={Smartphone} 
-                          active={settings.whatsappAutomation} 
+                          active={settings.whatsappAutomation !== false} 
                           onToggle={() => toggleSetting('whatsappAutomation')} 
                         />
-                      </div>
-                   </section>
-
-                   <section className="space-y-6">
-                      <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
-                        <Mail size={16} className="text-indigo-600" />
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Communication Protocols</h3>
-                      </div>
-                      <div className="grid grid-cols-1 gap-4">
                         <SettingRow 
-                          title={t.prefReports} 
-                          description={t.prefReportsDesc} 
-                          icon={ReceiptText} 
-                          active={settings.emailReports} 
-                          onToggle={() => toggleSetting('emailReports')} 
+                          title="Auto-Reminders on Overdue" 
+                          description="Trigger automated WhatsApp reminder when loan status changes to Overdue" 
+                          icon={AlertCircle} 
+                          active={settings.whatsappAutoOverdue !== false} 
+                          onToggle={() => toggleSetting('whatsappAutoOverdue')} 
                         />
                         <SettingRow 
-                          title={t.prefEmailNewApp} 
-                          description={t.prefEmailNewAppDesc} 
-                          icon={MailIcon} 
-                          active={settings.emailNewAppAlerts} 
-                          onToggle={() => toggleSetting('emailNewAppAlerts')} 
+                          title="Auto-Notice on Application Approval" 
+                          description="Trigger automated WhatsApp message with loan details upon approval" 
+                          icon={CheckCircle2} 
+                          active={settings.whatsappAutoApproval !== false} 
+                          onToggle={() => toggleSetting('whatsappAutoApproval')} 
                         />
                         <SettingRow 
-                          title={t.prefEmailOverdue} 
-                          description={t.prefEmailOverdueDesc} 
-                          icon={AlertTriangle} 
-                          active={settings.emailOverdueAlerts} 
-                          onToggle={() => toggleSetting('emailOverdueAlerts')} 
+                          title="Auto-Launch WhatsApp Tab" 
+                          description="Automatically open WhatsApp Web / App upon trigger" 
+                          icon={ArrowUpRight} 
+                          active={!!settings.whatsappAutoOpen} 
+                          onToggle={() => toggleSetting('whatsappAutoOpen')} 
                         />
                       </div>
-                   </section>
-                </div>
-              </div>
+                    </div>
+                  </section>
+               </div>
             )}
           </div>
         </Layout>
       )}
 
-      {/* Confirmation Modals */}
-      {(loanToDelete || borrowerToDelete) && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 animate-in fade-in duration-200">
-           <div className="absolute inset-0 bg-gray-950/40 backdrop-blur-sm" onClick={() => { setLoanToDelete(null); setBorrowerToDelete(null); }} />
-           <div className="bg-white max-w-sm w-full rounded-[2.5rem] p-8 shadow-2xl relative z-10 border border-gray-100 flex flex-col items-center text-center overflow-hidden">
-             <div className="absolute inset-0 opacity-[0.03] xhosa-pattern-sm pointer-events-none" />
-             <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-3xl flex items-center justify-center mb-6 shadow-sm border border-rose-100">
-                <AlertTriangle size={32} />
-             </div>
-             <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2">Are you sure?</h3>
-             <p className="text-sm text-gray-500 font-medium leading-relaxed mb-8">
-               {loanToDelete 
-                 ? `This will permanently delete Loan Account ${loanToDelete.id} for ${loanToDelete.borrowerName}. This action cannot be reversed.`
-                 : `This will permanently delete ${borrowerToDelete?.name}'s profile and ALL associated loans. This action cannot be reversed.`}
-             </p>
-             <div className="grid grid-cols-2 gap-4 w-full">
+      <AnimatePresence>
+        {selectedLoan && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+            <motion.div 
+              key="loan-detail-backdrop"
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              transition={{ duration: 0.24, ease: 'easeOut' }} 
+              className="fixed inset-0 bg-gray-950/60 backdrop-blur-md" 
+              onClick={() => setSelectedLoan(null)} 
+            />
+            <motion.div 
+              key="loan-detail-content"
+              initial={{ opacity: 0, scale: 0.94, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 30 }}
+              transition={{ 
+                type: 'spring', 
+                damping: 28, 
+                stiffness: 340, 
+                mass: 0.85 
+              }}
+              className="bg-white w-full max-w-2xl rounded-t-[2.5rem] sm:rounded-[3rem] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] mt-auto sm:my-auto"
+            >
+              {/* Mobile bottom-sheet drag handle */}
+              <div className="sm:hidden flex justify-center pt-3 pb-1">
+                <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
+              </div>
+
+              <div className="p-5 sm:p-8 border-b flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="bg-indigo-600 text-white px-2.5 py-1 rounded-md text-[10px] font-black font-mono tracking-wider">
+                    {selectedLoan.id}
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight font-heading">Loan Context</h3>
+                </div>
                 <button 
-                  onClick={() => { setLoanToDelete(null); setBorrowerToDelete(null); }}
-                  className="py-4 bg-gray-50 text-gray-500 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-gray-100 transition-all border border-gray-100"
+                  onClick={() => setSelectedLoan(null)} 
+                  className="p-2.5 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-900 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-5 sm:p-8 overflow-y-auto custom-scrollbar space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="relative group shrink-0">
+                    <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center text-indigo-600 border border-gray-100 overflow-hidden">
+                      {selectedLoan.profilePhoto ? (
+                        <img src={selectedLoan.profilePhoto} alt={selectedLoan.borrowerName} className="w-full h-full object-cover" />
+                      ) : (
+                        <UserCircle size={40} />
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openCameraCapture('borrower', selectedLoan.idNumber)}
+                      className="absolute -bottom-1 -right-1 bg-indigo-600 hover:bg-indigo-700 text-white p-1.5 rounded-full shadow-md transition-transform active:scale-90"
+                      title="Capture or update photo for this borrower"
+                    >
+                      <Camera size={12} />
+                    </button>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xl sm:text-2xl font-black uppercase truncate font-heading">{selectedLoan.borrowerName}</p>
+                    <p className="text-xs font-bold text-gray-400 truncate">ID: {selectedLoan.idNumber} • {selectedLoan.borrowerNumber}</p>
+                  </div>
+                </div>
+
+                <ApplicationTracker currentStatus={selectedLoan.applicationStatus} isAdmin={userRole === UserRole.LENDER} loanId={selectedLoan.id} />
+
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Principal</p>
+                    <p className="text-xl font-black mt-1 font-mono">R {selectedLoan.amountLoaned.toLocaleString()}</p>
+                  </div>
+                  <div className="p-4 bg-indigo-50 text-indigo-700 rounded-2xl border border-indigo-100">
+                    <p className="text-[10px] font-black text-indigo-500 uppercase tracking-wider">Total Due</p>
+                    <p className="text-xl font-black mt-1 font-mono">R {(selectedLoan.totalRepayment + calculatePenaltyDetails(selectedLoan).penalty).toLocaleString()}</p>
+                  </div>
+                </div>
+
+                {(() => {
+                  const b = borrowers.find(item => item.idNumber === selectedLoan.idNumber);
+                  const bScore = b ? b.score : calculateCreditScore(loans.filter(l => l.idNumber === selectedLoan.idNumber));
+                  return (
+                    <div className="p-4 sm:p-5 bg-gray-50/80 rounded-2xl border border-gray-100">
+                      <TrustScoreDisplay score={bScore} variant="card" showProgressBar={true} />
+                    </div>
+                  );
+                })()}
+
+                {calculatePenaltyDetails(selectedLoan).penalty > 0 && (
+                  <div className="p-4 bg-rose-50 text-rose-700 rounded-2xl border border-rose-200 flex items-center gap-3">
+                    <AlertTriangle size={20} className="shrink-0" />
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-wider">Active Penalty Applied</p>
+                      <p className="text-xs sm:text-sm font-bold mt-0.5">R {calculatePenaltyDetails(selectedLoan).penalty} for being {calculatePenaltyDetails(selectedLoan).weeks} week(s) late.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 sm:p-6 bg-gray-50/70 border-t flex flex-col-reverse sm:flex-row gap-2.5 justify-end flex-wrap">
+                <button 
+                  onClick={() => setSelectedLoan(null)} 
+                  className="w-full sm:w-auto px-5 py-3.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-xl font-black text-xs uppercase tracking-wider transition-colors min-h-[44px]"
+                >
+                  Close
+                </button>
+
+                {(userRole === UserRole.LENDER || (userRole === UserRole.BORROWER && (selectedLoan.applicationStatus === ApplicationStatus.SUBMITTED || selectedLoan.applicationStatus === ApplicationStatus.REVIEWING))) && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setLoanToEdit(selectedLoan)}
+                      className="w-full sm:w-auto px-4 py-3.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-black text-xs uppercase tracking-wider transition-all min-h-[44px] flex items-center justify-center gap-1.5 active:scale-95"
+                    >
+                      <Edit3 size={15} /> Edit Record
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLoanToDelete(selectedLoan)}
+                      className="w-full sm:w-auto px-4 py-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-black text-xs uppercase tracking-wider transition-all min-h-[44px] flex items-center justify-center gap-1.5 active:scale-95"
+                    >
+                      <Trash2 size={15} /> Delete Record
+                    </button>
+                  </>
+                )}
+
+                {userRole === UserRole.LENDER && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const isOverdue = selectedLoan.status === RepaymentStatus.OVERDUE || new Date(selectedLoan.dueDate) < new Date();
+                        const type = isOverdue ? 'overdue_reminder' : 'application_approved';
+                        dispatchAutomatedNotification(selectedLoan, type, `Dispatched from commitment details (${selectedLoan.id})`, true)
+                          .then(notif => {
+                            if (notif) setActiveWhatsAppNotification(notif);
+                          });
+                      }}
+                      className="w-full sm:w-auto px-4 py-3.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl font-black text-xs uppercase tracking-wider transition-all min-h-[44px] flex items-center justify-center gap-1.5 active:scale-95"
+                    >
+                      <Smartphone size={15} /> WhatsApp Notice
+                    </button>
+
+                    {selectedLoan.status !== RepaymentStatus.OVERDUE && selectedLoan.status !== RepaymentStatus.PAID && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleMarkAsOverdue(selectedLoan.id);
+                          setSelectedLoan(prev => prev ? { ...prev, status: RepaymentStatus.OVERDUE } : null);
+                        }}
+                        className="w-full sm:w-auto px-4 py-3.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-black text-xs uppercase tracking-wider transition-all min-h-[44px] flex items-center justify-center gap-1.5 active:scale-95"
+                      >
+                        <AlertTriangle size={15} /> Mark Overdue
+                      </button>
+                    )}
+                  </>
+                )}
+
+                {userRole === UserRole.LENDER && selectedLoan.status !== RepaymentStatus.PAID && (
+                  <button 
+                    onClick={() => handleMarkAsPaid(selectedLoan.id)} 
+                    className="w-full sm:w-auto px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition-all min-h-[44px] flex items-center justify-center gap-2"
+                  >
+                    <Check size={16} /> Record Payment
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isAddModalOpen && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-0 sm:p-6 overflow-y-auto">
+            <motion.div 
+              key="add-modal-backdrop"
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              transition={{ duration: 0.24, ease: 'easeOut' }} 
+              className="fixed inset-0 bg-gray-950/60 backdrop-blur-md" 
+              onClick={() => setIsAddModalOpen(false)} 
+            />
+            <motion.form 
+              key="add-modal-form"
+              initial={{ opacity: 0, scale: 0.94, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 30 }}
+              transition={{ 
+                type: 'spring', 
+                damping: 28, 
+                stiffness: 340, 
+                mass: 0.85 
+              }}
+              onSubmit={handleCreateLoan} 
+              className="bg-white w-full max-w-2xl rounded-t-[2.5rem] sm:rounded-[3rem] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] mt-auto sm:my-auto"
+            >
+              {/* Mobile bottom-sheet drag handle */}
+              <div className="sm:hidden flex justify-center pt-3 pb-1">
+                <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
+              </div>
+
+              <div className="p-5 sm:p-8 border-b flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight font-heading">Register Commitment</h3>
+                  <p className="text-xs text-gray-500 font-medium">Issue a new microloan or create a borrower profile.</p>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => setIsAddModalOpen(false)} 
+                  className="p-2.5 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-900 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-5 sm:p-8 overflow-y-auto custom-scrollbar space-y-5">
+                {/* Photo Capture Preview */}
+                <div className="flex items-center justify-between p-3.5 sm:p-4 bg-gray-50 rounded-2xl border border-dashed border-gray-300">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-indigo-100 overflow-hidden flex items-center justify-center text-indigo-600 border shrink-0">
+                      {newLoanForm.profilePhoto ? (
+                        <img src={newLoanForm.profilePhoto} alt="New borrower photo" className="w-full h-full object-cover" />
+                      ) : (
+                        <Camera size={20} />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs font-black uppercase text-gray-700 font-heading">Borrower Identity Photo</p>
+                      <p className="text-[10px] text-gray-400 font-medium">Optional: Capture live verification photo</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openCameraCapture('new_loan')}
+                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all min-h-[40px]"
+                  >
+                    <Camera size={14} />
+                    {newLoanForm.profilePhoto ? 'Retake' : 'Snap Photo'}
+                  </button>
+                </div>
+
+                {/* Form fields */}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-400">Borrower Full Name *</label>
+                      <input 
+                        required 
+                        placeholder="e.g. Sipho Ndlovu" 
+                        className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl w-full font-bold text-sm focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all min-h-[46px]" 
+                        value={newLoanForm.borrowerName} 
+                        onChange={e => setNewLoanForm({...newLoanForm, borrowerName: e.target.value})} 
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black uppercase tracking-wider text-gray-400">SA ID Number *</label>
+                      <input 
+                        required 
+                        maxLength={13}
+                        inputMode="numeric"
+                        placeholder="13-digit ID Number" 
+                        className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl w-full font-bold text-sm font-mono focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all min-h-[46px]" 
+                        value={newLoanForm.idNumber} 
+                        onChange={e => setNewLoanForm({...newLoanForm, idNumber: e.target.value.replace(/\D/g, '')})} 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-gray-400">Principal Amount (R) *</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAddModalOpen(false);
+                            setIsEmiCalculatorModalOpen(true);
+                          }}
+                          className="text-[10px] text-amber-600 hover:text-amber-700 font-black uppercase hover:underline flex items-center gap-1 transition-colors"
+                        >
+                          <Calculator size={11} /> EMI Calculator & Penalties
+                        </button>
+                      </div>
+                      <input 
+                        required 
+                        type="number" 
+                        min="100" 
+                        max="50000" 
+                        step="100" 
+                        inputMode="numeric"
+                        placeholder="e.g. 2500" 
+                        className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl w-full font-bold text-sm font-mono focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all min-h-[46px]" 
+                        value={newLoanForm.amountLoaned || ''} 
+                        onChange={e => setNewLoanForm({...newLoanForm, amountLoaned: Number(e.target.value)})} 
+                      />
+                      <div className="flex items-center gap-1.5 pt-1">
+                        {[1000, 2500, 5000].map(amt => (
+                          <button
+                            key={amt}
+                            type="button"
+                            onClick={() => setNewLoanForm(prev => ({ ...prev, amountLoaned: amt }))}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-black transition-all ${
+                              newLoanForm.amountLoaned === amt 
+                                ? 'bg-indigo-600 text-white' 
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                          >
+                            R {amt.toLocaleString()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-gray-400">Due Date (Max 1 Month) *</label>
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-600">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const in14 = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+                              setNewLoanForm(prev => ({ ...prev, dueDate: in14 }));
+                            }}
+                            className="hover:underline"
+                          >
+                            +14d
+                          </button>
+                          <span className="text-gray-300">•</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const in30 = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+                              setNewLoanForm(prev => ({ ...prev, dueDate: in30 }));
+                            }}
+                            className="hover:underline"
+                          >
+                            +30d (Max)
+                          </button>
+                        </div>
+                      </div>
+                      <input 
+                        required 
+                        type="date" 
+                        min={new Date().toISOString().split('T')[0]}
+                        max={new Date(Date.now() + 31 * 86400000).toISOString().split('T')[0]}
+                        className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl w-full font-bold text-sm focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all min-h-[46px]" 
+                        value={newLoanForm.dueDate} 
+                        onChange={e => setNewLoanForm({...newLoanForm, dueDate: e.target.value})} 
+                      />
+                      <p className="text-[10px] text-gray-400">Repayment term is capped up to 1 month (maximum 31 days).</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-gray-400">Mobile Phone (for WhatsApp Reminders) *</label>
+                    <input 
+                      required 
+                      type="tel" 
+                      inputMode="tel"
+                      placeholder="e.g. 082 123 4567" 
+                      className="p-3.5 bg-gray-50 border border-gray-200 rounded-2xl w-full font-bold text-sm font-mono focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all min-h-[46px]" 
+                      value={newLoanForm.borrowerNumber} 
+                      onChange={e => setNewLoanForm({...newLoanForm, borrowerNumber: e.target.value})} 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 sm:p-6 bg-gray-50/80 border-t flex flex-col-reverse sm:flex-row gap-3 justify-end">
+                <button 
+                  type="button" 
+                  onClick={() => setIsAddModalOpen(false)} 
+                  className="w-full sm:w-auto px-6 py-3.5 font-black text-xs uppercase text-gray-500 hover:text-gray-800 transition-colors min-h-[44px]"
                 >
                   Cancel
                 </button>
                 <button 
-                  onClick={() => loanToDelete ? handleDeleteLoan(loanToDelete.id) : handleDeleteBorrower(borrowerToDelete!.idNumber)}
-                  className="py-4 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-rose-200 hover:bg-rose-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  type="submit" 
+                  className="w-full sm:w-auto px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition-all min-h-[44px]"
                 >
-                  <Trash2 size={14} /> Delete
+                  Confirm & Issue
                 </button>
-             </div>
-           </div>
-        </div>
-      )}
-
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-gray-950/60 backdrop-blur-md" onClick={() => setIsAddModalOpen(false)} />
-          <form onSubmit={handleCreateLoan} className="bg-white w-full max-w-4xl rounded-[2.5rem] md:rounded-[40px] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
-             <div className="p-6 md:p-8 border-b border-gray-50 flex items-center justify-between sticky top-0 bg-white z-20">
-                <div className="flex items-center gap-3">
-                   <div className="bg-indigo-600 text-white p-2 rounded-xl shadow-lg"><Plus size={24} /></div>
-                   <div>
-                     <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Create Loan Account</h3>
-                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">New commitment registration</p>
-                   </div>
-                </div>
-                <button type="button" onClick={() => setIsAddModalOpen(false)} className="p-2 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-full transition-all"><X size={24} /></button>
-             </div>
-             
-             <div className="p-6 md:p-10 overflow-y-auto custom-scrollbar space-y-10">
-                {/* Personal Section */}
-                <section className="space-y-6">
-                  <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
-                    <UserCircle size={16} className="text-indigo-600" />
-                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Borrower Personal Details</h4>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Borrower Full Name</label>
-                      <input required value={newLoanForm.borrowerName} onChange={e => setNewLoanForm({...newLoanForm, borrowerName: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" placeholder="e.g. Sipho Mntungwa" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">ID Number</label>
-                      <input required value={newLoanForm.idNumber} onChange={e => setNewLoanForm({...newLoanForm, idNumber: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" placeholder="920101XXXX081" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Physical Address</label>
-                      <input required value={newLoanForm.physicalAddress} onChange={e => setNewLoanForm({...newLoanForm, physicalAddress: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" placeholder="Street, Suburb, City" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Mobile Number</label>
-                      <input required value={newLoanForm.borrowerNumber} onChange={e => setNewLoanForm({...newLoanForm, borrowerNumber: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" placeholder="071 000 0000" />
-                    </div>
-                  </div>
-                </section>
-
-                {/* Employment Section */}
-                <section className="space-y-6">
-                  <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
-                    <Building2 size={16} className="text-indigo-600" />
-                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Work & Stability Details</h4>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Employer Name</label>
-                      <div className="relative">
-                        <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
-                        <input required value={newLoanForm.employer} onChange={e => setNewLoanForm({...newLoanForm, employer: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" placeholder="Company or Organization" />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Employment Status</label>
-                      <div className="relative">
-                        <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
-                        <select 
-                          required 
-                          value={newLoanForm.employmentStatus} 
-                          onChange={e => setNewLoanForm({...newLoanForm, employmentStatus: e.target.value})} 
-                          className="w-full bg-gray-50 border-none rounded-2xl pl-12 pr-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900 appearance-none"
-                        >
-                          {EMPLOYMENT_STATUSES.map(status => (
-                            <option key={status} value={status}>{status}</option>
-                          ))}
-                        </select>
-                        <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 rotate-90 pointer-events-none" size={18} />
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                {/* Financial Section */}
-                <section className="space-y-6">
-                  <div className="flex items-center gap-3 border-b border-gray-100 pb-2">
-                    <Wallet size={16} className="text-indigo-600" />
-                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Financial Terms</h4>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Principal Amount (R)</label>
-                      <input type="number" required value={newLoanForm.amountLoaned} onChange={e => setNewLoanForm({...newLoanForm, amountLoaned: Number(e.target.value)})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-black text-lg shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Due Date</label>
-                      <input type="date" required value={newLoanForm.dueDate} onChange={e => setNewLoanForm({...newLoanForm, dueDate: e.target.value})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Payout Method</label>
-                      <select required value={newLoanForm.payoutMethod} onChange={e => setNewLoanForm({...newLoanForm, payoutMethod: e.target.value as PayoutMethod})} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 font-bold text-sm shadow-inner focus:ring-2 focus:ring-indigo-600 text-gray-900 appearance-none">
-                        <option value={PayoutMethod.MOBILE}>{PayoutMethod.MOBILE}</option>
-                        <option value={PayoutMethod.BANK}>{PayoutMethod.BANK}</option>
-                      </select>
-                    </div>
-                  </div>
-                </section>
-             </div>
-             
-             <div className="p-6 md:p-8 bg-gray-50/50 border-t border-gray-50 flex flex-wrap gap-4 justify-end">
-                <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-8 py-4 bg-white border border-gray-100 rounded-2xl font-black text-[10px] uppercase tracking-widest text-gray-400 hover:text-indigo-600 transition-all">Cancel</button>
-                <button type="submit" className="px-10 py-4 bg-[#1a1a1a] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black transition-all flex items-center gap-3">
-                  <Save size={16} /> Save Loan Account
-                </button>
-             </div>
-          </form>
-        </div>
-      )}
-
-      {selectedLoan && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-gray-950/60 backdrop-blur-md" onClick={() => setSelectedLoan(null)} />
-          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] md:rounded-[40px] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
-             <div className="p-6 md:p-8 border-b border-gray-50 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                   <div className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-lg rotate-1 uppercase tracking-tighter">{selectedLoan.id}</div>
-                   <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">{language === Language.EN ? 'Transaction Detail' : 'Iinkcukacha Zentengiselwano'}</h3>
-                </div>
-                <button onClick={() => setSelectedLoan(null)} className="p-2 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-full transition-all"><X size={24} /></button>
-             </div>
-             <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-8">
-                <div className="flex items-center gap-6"><div className="w-20 h-20 rounded-3xl bg-gray-50 flex items-center justify-center text-indigo-600 border border-gray-100"><UserCircle size={48} /></div><div><h4 className="text-2xl font-black text-gray-900 leading-none mb-2">{selectedLoan.borrowerName}</h4><div className="flex flex-wrap items-center gap-4 text-[10px] text-gray-400 font-black uppercase tracking-widest"><span className="flex items-center gap-1"><Smartphone size={12} /> {selectedLoan.borrowerNumber}</span><span className="flex items-center gap-1"><Fingerprint size={12} /> {selectedLoan.idNumber}</span></div></div></div>
-                
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                    <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Financial Breakdown</h5>
-                    <HelpCircle size={14} className="text-gray-300 hover:text-indigo-600 cursor-help transition-colors" />
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-gray-50 p-5 rounded-3xl border border-gray-100 flex flex-col justify-center">
-                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{t.principal}</p>
-                      <p className="text-lg font-black text-gray-900">R {selectedLoan.amountLoaned.toLocaleString()}</p>
-                    </div>
-                    <div className="bg-gray-50 p-5 rounded-3xl border border-gray-100 flex flex-col justify-center">
-                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">{t.interest}</p>
-                      <p className="text-lg font-black text-indigo-600">R {(selectedLoan.totalRepayment - selectedLoan.amountLoaned).toLocaleString()}</p>
-                    </div>
-                    {calculatePenaltyDetails(selectedLoan).penalty > 0 && (
-                      <div className="bg-rose-50 p-5 rounded-3xl border border-rose-100 flex flex-col justify-center relative overflow-hidden group">
-                        <div className="absolute -right-2 -top-2 opacity-5 group-hover:rotate-12 transition-transform"><AlertTriangle size={48} /></div>
-                        <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-1">Penalties</p>
-                        <p className="text-lg font-black text-rose-600">R {calculatePenaltyDetails(selectedLoan).penalty.toLocaleString()}</p>
-                        <p className="text-[8px] font-bold text-rose-400 uppercase mt-0.5">{calculatePenaltyDetails(selectedLoan).weeks} Weeks Overdue</p>
-                      </div>
-                    )}
-                    <div className={`p-5 rounded-3xl border flex flex-col justify-center relative overflow-hidden ${calculatePenaltyDetails(selectedLoan).penalty > 0 ? 'bg-indigo-600 text-white border-indigo-700 shadow-xl md:col-span-1 col-span-2' : 'bg-indigo-50 border-indigo-100 text-indigo-600 md:col-span-2 col-span-2'}`}>
-                      <div className="absolute inset-0 xhosa-pattern-sm opacity-[0.05]" />
-                      <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${calculatePenaltyDetails(selectedLoan).penalty > 0 ? 'text-indigo-200' : 'text-indigo-400'}`}>{t.totalDue}</p>
-                      <p className="text-2xl font-black font-mono">R {(selectedLoan.totalRepayment + calculatePenaltyDetails(selectedLoan).penalty).toLocaleString()}</p>
-                    </div>
-                  </div>
-
-                  {calculatePenaltyDetails(selectedLoan).penalty > 0 && (
-                    <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-4 mt-4 animate-in slide-in-from-top-2 duration-300">
-                      <div className="p-2 bg-amber-100 rounded-xl text-amber-600"><Info size={18} /></div>
-                      <div>
-                        <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-1">Penalty Calculation Logic</p>
-                        <p className="text-xs font-medium text-amber-700 leading-relaxed">
-                          A penalty of <span className="font-bold">{selectedLoan.penaltyRate}%</span> of the principal (<span className="font-bold">R{selectedLoan.amountLoaned}</span>) is applied for every week overdue. 
-                          This loan is <span className="font-bold">{calculatePenaltyDetails(selectedLoan).weeks} week(s)</span> late, resulting in <span className="font-bold">R{calculatePenaltyDetails(selectedLoan).penalty}</span> added to the balance.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-4">
-                   <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100 pb-2">Timeline Details</h5>
-                   <div className="grid grid-cols-2 gap-4">
-                      <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                         <Calendar size={18} className="text-indigo-600" />
-                         <div><p className="text-[8px] font-black text-gray-400 uppercase">Started</p><p className="text-xs font-black text-gray-700">{selectedLoan.startDate}</p></div>
-                      </div>
-                      <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                         <Clock size={18} className="text-indigo-600" />
-                         <div><p className="text-[8px] font-black text-gray-400 uppercase">Due Date</p><p className="text-xs font-black text-gray-700">{selectedLoan.dueDate}</p></div>
-                      </div>
-                   </div>
-                </div>
-             </div>
-             <div className="p-6 md:p-8 bg-gray-50/50 border-t border-gray-50 flex flex-wrap gap-4 justify-end">
-               {userRole === UserRole.LENDER && selectedLoan.status !== RepaymentStatus.PAID && (
-                 <button 
-                   onClick={() => { handleMarkAsPaid(selectedLoan.id); setSelectedLoan(null); }} 
-                   className="flex-1 md:flex-none px-10 py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
-                 >
-                   <CheckCircle2 size={16} /> Mark as Paid
-                 </button>
-               )}
-               <button onClick={() => setSelectedLoan(null)} className="flex-1 md:flex-none px-10 py-4 bg-[#1a1a1a] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-black transition-all">Close Details</button>
-             </div>
+              </div>
+            </motion.form>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
+      {/* Comprehensive Borrower Dossier Modal for Lenders */}
       {selectedBorrower && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-gray-950/40 backdrop-blur-xl" onClick={() => setSelectedBorrowerId(null)} />
-          <div className="bg-white w-full max-w-4xl rounded-[2.5rem] md:rounded-[40px] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]">
-            {/* Modal Header Section */}
-            <div className="relative w-full h-40 bg-[#1a1a1a] p-8 flex items-start justify-end flex-shrink-0">
-              <div className="absolute inset-0 opacity-[0.05] xhosa-pattern pointer-events-none" />
-              <button 
-                onClick={() => setSelectedBorrowerId(null)} 
-                className="p-3 bg-white/10 text-white hover:bg-white/20 rounded-full transition-all z-20 backdrop-blur-md border border-white/5"
-              >
-                <X size={24} />
-              </button>
-              
-              {/* Profile Picture Overlap */}
-              <div className="absolute left-8 bottom-0 translate-y-1/2 flex items-end gap-6 z-30">
-                <div className="w-24 h-24 md:w-36 md:h-36 rounded-[2.5rem] bg-indigo-600 flex items-center justify-center text-white text-4xl md:text-6xl font-black shadow-2xl border-4 border-white overflow-hidden relative group">
-                  {selectedBorrower.name[0]}
-                </div>
-              </div>
-            </div>
-
-            {/* Scrollable Content */}
-            <div className="pt-16 md:pt-24 p-6 md:p-12 overflow-y-auto custom-scrollbar flex-grow">
-              {/* Profile Identity Details (Moved below picture) */}
-              <div className="mb-10">
-                <h3 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight leading-none mb-3">
-                  {selectedBorrower.name}
-                </h3>
-                <div className={`px-3 py-1.5 rounded-full ${getScoreRating(selectedBorrower.score).bg} ${getScoreRating(selectedBorrower.score).color} text-[10px] font-black uppercase tracking-widest border ${getScoreRating(selectedBorrower.score).border} inline-flex items-center gap-2 shadow-sm`}>
-                  <ShieldCheck size={12} /> Verified {getScoreRating(selectedBorrower.score).label} Member
-                </div>
-              </div>
-
-              {/* Prominent Contact Bar */}
-              <div className="flex flex-wrap items-center gap-6 p-5 bg-gray-50 rounded-[32px] border border-gray-100 mb-10 shadow-sm relative overflow-hidden group">
-                <div className="absolute inset-0 xhosa-pattern-sm opacity-[0.03] pointer-events-none" />
-                <div className="flex items-center gap-3 relative z-10">
-                  <div className="p-3 bg-white rounded-2xl shadow-sm border border-gray-100 group-hover:scale-110 transition-transform">
-                    <Smartphone size={20} className="text-indigo-600" />
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Primary Mobile</p>
-                    <p className="text-base font-black text-gray-900 tracking-tight">{selectedBorrower.phone}</p>
-                  </div>
-                </div>
-                <div className="h-10 w-px bg-gray-200 hidden sm:block mx-2" />
-                <div className="flex items-center gap-3 relative z-10">
-                  <div className="p-3 bg-white rounded-2xl shadow-sm border border-gray-100 group-hover:scale-110 transition-transform">
-                    <MailIcon size={20} className="text-indigo-600" />
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Email Address</p>
-                    <p className="text-base font-black text-gray-900 tracking-tight lowercase">{selectedBorrower.email}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-                <div className="space-y-6">
-                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100 pb-2">Verification Info</h4>
-                  <div className="space-y-5">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 bg-indigo-50 rounded-xl"><Home size={18} className="text-indigo-600" /></div>
-                      <div>
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Physical Address</p>
-                        <p className="text-xs font-bold text-gray-600 leading-relaxed">{selectedBorrower.address}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 bg-indigo-50 rounded-xl"><Fingerprint size={18} className="text-indigo-600" /></div>
-                      <div>
-                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">National Identity</p>
-                        <p className="text-xs font-bold text-gray-600 font-mono tracking-wider">{selectedBorrower.idNumber}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="col-span-1 md:col-span-2 space-y-6">
-                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100 pb-2">Financial Motif</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 relative overflow-hidden group shadow-sm">
-                      <div className={`absolute top-0 right-0 p-4 opacity-10 ${getScoreRating(selectedBorrower.score).color}`}><Zap size={48} fill="currentColor" /></div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Trust Score</p>
-                      <div className="flex items-baseline gap-2">
-                        <p className={`text-5xl font-black ${getScoreRating(selectedBorrower.score).color}`}>{selectedBorrower.score}</p>
-                        <p className="text-gray-400 text-sm font-bold">/ 850</p>
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 flex flex-col justify-center shadow-sm">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Account Health</p>
-                      <div className="space-y-4">
-                        <div className="flex justify-between items-center bg-white p-3 rounded-2xl border border-gray-100">
-                          <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Total Active</span>
-                          <span className="text-xl font-black text-gray-900">{selectedBorrower.loans.length}</span>
-                        </div>
-                        <div className="flex justify-between items-center bg-rose-50 p-3 rounded-2xl border border-rose-100">
-                          <span className="text-xs font-bold text-rose-600 uppercase tracking-widest">Overdue</span>
-                          <span className="text-xl font-black text-rose-600">{selectedBorrower.loans.filter(l => l.status === RepaymentStatus.OVERDUE).length}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-8 border-t border-gray-50 bg-gray-50/50 flex justify-between gap-4 flex-shrink-0">
-              {userRole === UserRole.LENDER && (
-                <button 
-                  onClick={() => setBorrowerToDelete({ idNumber: selectedBorrower.idNumber, name: selectedBorrower.name })}
-                  className="px-8 py-4 bg-rose-50 text-rose-600 rounded-[24px] text-[10px] font-black uppercase tracking-widest border border-rose-100 hover:bg-rose-100 transition-all flex items-center gap-2"
-                >
-                  <Trash2 size={14} /> Delete Profile
-                </button>
-              )}
-              <button 
-                onClick={() => setSelectedBorrowerId(null)} 
-                className="px-10 py-4 bg-white border border-gray-100 rounded-[24px] text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 hover:border-indigo-100 shadow-sm transition-all ml-auto"
-              >
-                Close Profile View
-              </button>
-            </div>
-          </div>
-        </div>
+        <BorrowerDossierModal
+          borrower={selectedBorrower}
+          onClose={() => setSelectedBorrowerId(null)}
+          onSaveProfile={handleSaveBorrowerProfile}
+          onOpenPhotoCapture={(idNumber) => openCameraCapture('borrower', idNumber)}
+          onIssueLoanForBorrower={handleIssueLoanForBorrower}
+          onSelectLoan={(loan) => setSelectedLoan(loan)}
+          onMarkLoanAsPaid={handleMarkAsPaid}
+          onEditLoan={(loan) => setLoanToEdit(loan)}
+          onDeleteLoan={(loan) => setLoanToDelete(loan)}
+        />
       )}
+
+      {/* Dedicated Loan Edit Modal */}
+      <AnimatePresence>
+        {loanToEdit && (
+          <EditLoanModal
+            loan={loanToEdit}
+            isOpen={!!loanToEdit}
+            onClose={() => setLoanToEdit(null)}
+            onSave={handleSaveEditedLoan}
+            onDelete={(loan) => {
+              setLoanToEdit(null);
+              setLoanToDelete(loan);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Dedicated Loan Deletion Confirmation Modal */}
+      <AnimatePresence>
+        {loanToDelete && (
+          <DeleteLoanModal
+            loan={loanToDelete}
+            isOpen={!!loanToDelete}
+            onClose={() => setLoanToDelete(null)}
+            onConfirm={handleDeleteLoan}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Borrower Deletion Confirmation Dialog */}
+      <AnimatePresence>
+        {borrowerToDelete && (
+          <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+            <motion.div
+              key="delete-borrower-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-gray-950/70 backdrop-blur-sm"
+              onClick={() => setBorrowerToDelete(null)}
+            />
+            <motion.div
+              key="delete-borrower-card"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl relative z-10 border border-rose-100"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                <Trash2 size={28} />
+              </div>
+              <h3 className="text-xl font-black uppercase text-gray-900">Remove Borrower Profile?</h3>
+              <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                Are you sure you want to permanently remove <strong className="text-gray-900">{borrowerToDelete.name}</strong> (ID: {borrowerToDelete.idNumber})? This will also remove their associated loan records from Firestore.
+              </p>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setBorrowerToDelete(null)}
+                  className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-black text-xs uppercase transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeleteBorrower(borrowerToDelete.idNumber)}
+                  className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-black text-xs uppercase shadow-md transition-colors"
+                >
+                  Confirm Delete
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Global Camera Capture Modal */}
+      <CameraCaptureModal
+        isOpen={isCameraModalOpen}
+        onClose={() => setIsCameraModalOpen(false)}
+        onCapture={handleCapturedPhoto}
+        currentPhoto={getCurrentPhotoForContext()}
+        userName={getCurrentNameForContext()}
+      />
+
+      {/* Historical Data Recovery & Backup Hub */}
+      <DataRecoveryModal
+        isOpen={isDataRecoveryOpen}
+        onClose={() => setIsDataRecoveryOpen(false)}
+        loans={loans || []}
+        borrowers={borrowers || []}
+        currentLoans={loans || []}
+        currentBorrowers={borrowers || []}
+        settings={settings}
+        isCloudConnected={isCloudConnected}
+        onDataRestored={(restoredLoans, restoredBorrowers) => {
+          setLoans(prev => {
+            const existingIds = new Set(prev.map(l => l.id));
+            const newLoans = restoredLoans.filter(l => !existingIds.has(l.id));
+            return [...prev, ...newLoans];
+          });
+          setExtraProfiles(prev => {
+            const existingIds = new Set(prev.map(p => p.idNumber));
+            const newProfiles = restoredBorrowers.filter(p => !existingIds.has(p.idNumber));
+            return [...prev, ...newProfiles];
+          });
+          setShowToast("Database successfully updated with recovered records!");
+          setTimeout(() => setShowToast(null), 4000);
+        }}
+      />
+
+      {/* Automated WhatsApp Trigger Notification Prompt Modal */}
+      <WhatsAppNotificationModal
+        notification={activeWhatsAppNotification}
+        onClose={() => setActiveWhatsAppNotification(null)}
+        onMarkSent={() => {
+          setActiveWhatsAppNotification(null);
+          setShowToast("WhatsApp reminder acknowledged.");
+          setTimeout(() => setShowToast(null), 2500);
+        }}
+      />
+
+      {/* WhatsApp Automation Hub & Audit Logs */}
+      <WhatsAppAutomationHub
+        isOpen={isWhatsAppHubOpen}
+        onClose={() => setIsWhatsAppHubOpen(false)}
+        loans={loans || []}
+        settings={settings}
+        onUpdateSettings={(newSettings) => {
+          setSettings(newSettings);
+          saveSettingsToFirestore(newSettings).catch(err => console.warn('WhatsApp settings sync deferred:', err));
+        }}
+        onLoansUpdated={(updatedLoans) => {
+          setLoans(updatedLoans);
+          updatedLoans.forEach(l => {
+            saveLoanToFirestore(l).catch(err => console.warn('WhatsApp loan sync deferred:', err));
+          });
+        }}
+        notifications={whatsAppNotifications}
+        onTriggerNotification={(notif) => {
+          setActiveWhatsAppNotification(notif);
+        }}
+      />
+
+      {/* Prospective Borrower Loan EMI & Penalty Structure Calculator Modal */}
+      <AnimatePresence>
+        {isEmiCalculatorModalOpen && (
+          <LoanEmiCalculatorModal
+            isOpen={isEmiCalculatorModalOpen}
+            onClose={() => setIsEmiCalculatorModalOpen(false)}
+            borrower={currentBorrowerAccount}
+            defaultPrincipal={newLoanForm.amountLoaned || 2500}
+            defaultWeeks={4}
+            interestRate={DEFAULT_INTEREST_RATE}
+            penaltyRate={DEFAULT_PENALTY_RATE}
+            language={language}
+            onApply={(amount, termWeeks, dueDate) => {
+              if (currentBorrowerAccount) {
+                setNewLoanForm({
+                  borrowerName: currentBorrowerAccount.name,
+                  idNumber: currentBorrowerAccount.idNumber,
+                  physicalAddress: currentBorrowerAccount.address || '',
+                  borrowerNumber: currentBorrowerAccount.phone || '',
+                  employer: currentBorrowerAccount.employer || '',
+                  employmentStatus: currentBorrowerAccount.employmentStatus || 'Full-time',
+                  amountLoaned: amount,
+                  dueDate: dueDate,
+                  payoutMethod: currentBorrowerAccount.payoutMethod || PayoutMethod.MOBILE,
+                  profilePhoto: currentBorrowerAccount.profilePhoto || ''
+                });
+              } else {
+                setNewLoanForm(prev => ({
+                  ...prev,
+                  amountLoaned: amount,
+                  dueDate: dueDate
+                }));
+              }
+              setIsAddModalOpen(true);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

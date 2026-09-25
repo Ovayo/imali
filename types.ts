@@ -37,10 +37,17 @@ export interface LoanHistoryItem {
 export interface UserSettings {
   overdueAlerts: boolean;
   whatsappAutomation: boolean;
+  whatsappAutoOverdue?: boolean;
+  whatsappAutoApproval?: boolean;
+  whatsappAutoOpen?: boolean;
   emailReports: boolean;
   emailNewAppAlerts: boolean;
   emailOverdueAlerts: boolean;
   darkMode: boolean;
+  adminVaultKey: string;
+  smsStatusUpdates: boolean;
+  emailStatusUpdates: boolean;
+  lenderPhoto?: string;
 }
 
 export interface LoanTemplate {
@@ -52,21 +59,48 @@ export interface LoanTemplate {
   purposeXh: string;
 }
 
+export interface BorrowerProfile {
+  idNumber: string;
+  name: string;
+  phone: string;
+  address: string;
+  email: string;
+  profilePhoto?: string;
+  score?: number;
+  employer?: string;
+  employmentStatus?: string;
+  monthlyIncome?: number;
+  alternativeNumber?: string;
+  payoutMethod?: PayoutMethod;
+  bankDetails?: string;
+  notes?: string;
+  kycVerified?: boolean;
+  kycIdVerified?: boolean;
+  kycAddressVerified?: boolean;
+  kycFaceVerified?: boolean;
+  kycDocumentVerified?: boolean;
+  kycIncomeVerified?: boolean;
+  kycDocumentType?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Loan {
   id: string;
   borrowerName: string;
   idNumber: string;
   physicalAddress: string;
-  borrowerNumber: string; // Primary mobile number
-  email?: string; // Optional email address
+  borrowerNumber: string;
+  profilePhoto?: string;
+  email?: string;
   alternativeNumber?: string;
   employer?: string;
-  employmentStatus?: string; // Added field
+  employmentStatus?: string;
   payoutMethod: PayoutMethod;
   bankDetails?: string;
   amountLoaned: number;
-  interestRate: number; // Percentage
-  penaltyRate: number; // Weekly percentage for overdue
+  interestRate: number;
+  penaltyRate: number;
   totalRepayment: number;
   startDate: string;
   dueDate: string;
@@ -86,4 +120,19 @@ export interface DashboardStats {
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
+}
+
+export type WhatsAppNotificationType = 'overdue_reminder' | 'application_approved';
+
+export interface WhatsAppNotification {
+  id: string;
+  loanId: string;
+  borrowerName: string;
+  borrowerNumber: string;
+  type: WhatsAppNotificationType;
+  triggerReason: string;
+  message: string;
+  waUrl: string;
+  timestamp: string;
+  status: 'sent' | 'triggered' | 'dismissed';
 }

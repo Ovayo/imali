@@ -1,8 +1,11 @@
 {
   "name": "imali",
-  "description": "A modern, culturally-inspired micro-lending platform designed for young South African professionals. Features include automated penalty calculations, isiXhosa cultural aesthetic, and AI-driven credit insights.",
+  "description": "A modern, culturally-inspired micro-lending platform designed for South African micro-lenders and borrowers. Features include automated penalty calculations, comprehensive borrower dossiers, KYC tracking, credit health metrics, real-time Firestore synchronization, and isiXhosa cultural aesthetic.",
   "requestFramePermissions": [
     "camera",
     "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
 }

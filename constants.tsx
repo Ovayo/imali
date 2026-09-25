@@ -40,25 +40,10 @@ export const LOAN_TEMPLATES: LoanTemplate[] = [
 ];
 
 export const SA_BANKS = [
-  'Standard Bank',
-  'First National Bank (FNB)',
-  'Absa',
-  'Nedbank',
-  'Capitec Bank',
-  'TymeBank',
-  'Discovery Bank',
-  'Bank Zero',
-  'African Bank',
-  'Investec',
-  'Bidvest Bank',
-  'Sasfin Bank',
-  'Grindrod Bank',
-  'Postbank',
-  'Old Mutual Bank',
-  'Mercantile Bank',
-  'Al Baraka Bank',
-  'HBZ Bank',
-  'Access Bank South Africa'
+  'Standard Bank', 'First National Bank (FNB)', 'Absa', 'Nedbank', 'Capitec Bank',
+  'TymeBank', 'Discovery Bank', 'Bank Zero', 'African Bank', 'Investec',
+  'Bidvest Bank', 'Sasfin Bank', 'Grindrod Bank', 'Postbank', 'Old Mutual Bank',
+  'Mercantile Bank', 'Al Baraka Bank', 'HBZ Bank', 'Access Bank South Africa'
 ];
 
 export const INITIAL_LOANS: Loan[] = [
@@ -77,198 +62,9 @@ export const INITIAL_LOANS: Loan[] = [
     dueDate: '2025-12-01',
     status: RepaymentStatus.PAID,
     applicationStatus: ApplicationStatus.APPROVED,
-    notes: '20% for Aretha',
     history: [
       { date: '2025-11-15', action: 'Loan Disbursed', amount: 400 },
       { date: '2025-12-01', action: 'Full Repayment Received', amount: 520 }
-    ]
-  },
-  {
-    id: 'T002',
-    borrowerName: 'Ms A Gwavu',
-    idNumber: '8805120002084',
-    physicalAddress: 'Qonce, South Africa',
-    borrowerNumber: '0694266153',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 400,
-    interestRate: 30,
-    penaltyRate: 5,
-    totalRepayment: 520,
-    startDate: '2025-11-15',
-    dueDate: '2025-11-25',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '20% for Aretha',
-    history: [
-      { date: '2025-11-15', action: 'Loan Disbursed', amount: 400 },
-      { date: '2025-11-25', action: 'Full Repayment Received', amount: 520 }
-    ]
-  },
-  {
-    id: 'T003',
-    borrowerName: 'Ms Seekane',
-    idNumber: '9506150003087',
-    physicalAddress: 'Mthatha, South Africa',
-    borrowerNumber: '0691960577',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 200,
-    interestRate: 60,
-    penaltyRate: 5,
-    totalRepayment: 320,
-    startDate: '2025-11-16',
-    dueDate: '2025-11-30',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '',
-    history: [
-      { date: '2025-11-16', action: 'Loan Disbursed', amount: 200 },
-      { date: '2025-11-30', action: 'Full Repayment Received', amount: 320 }
-    ]
-  },
-  {
-    id: 'T004',
-    borrowerName: 'Mr Moyakhe',
-    idNumber: '8204200004082',
-    physicalAddress: 'Gqeberha, South Africa',
-    borrowerNumber: '0815676183',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 250,
-    interestRate: 30,
-    penaltyRate: 5,
-    totalRepayment: 325,
-    startDate: '2025-11-16',
-    dueDate: '2025-11-25',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '20% for Aretha',
-    history: [
-      { date: '2025-11-16', action: 'Loan Disbursed', amount: 250 },
-      { date: '2025-11-25', action: 'Full Repayment Received', amount: 325 }
-    ]
-  },
-  {
-    id: 'T005',
-    borrowerName: 'Simphiwe',
-    idNumber: '9008280005089',
-    physicalAddress: 'East London, South Africa',
-    borrowerNumber: '0634804576',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 400,
-    interestRate: 30,
-    penaltyRate: 5,
-    totalRepayment: 520,
-    startDate: '2025-11-18',
-    dueDate: '2025-11-25',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '',
-    history: [
-      { date: '2025-11-18', action: 'Loan Disbursed', amount: 400 },
-      { date: '2025-11-25', action: 'Full Repayment Received', amount: 520 }
-    ]
-  },
-  {
-    id: 'T006',
-    borrowerName: 'Tito',
-    idNumber: '8511100006085',
-    physicalAddress: 'Butterworth, South Africa',
-    borrowerNumber: '0605679674',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 1500,
-    interestRate: 30,
-    penaltyRate: 5,
-    totalRepayment: 1950,
-    startDate: '2025-11-07',
-    dueDate: '2025-11-30',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '',
-    history: [
-      { date: '2025-11-07', action: 'Loan Disbursed', amount: 1500 },
-      { date: '2025-11-30', action: 'Full Repayment Received', amount: 1950 }
-    ]
-  },
-  {
-    id: 'T007',
-    borrowerName: 'Tito',
-    idNumber: '8511100006085',
-    physicalAddress: 'Butterworth, South Africa',
-    borrowerNumber: '0605679674',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 500,
-    interestRate: 30,
-    penaltyRate: 5,
-    totalRepayment: 650,
-    startDate: '2025-11-09',
-    dueDate: '2025-11-30',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '',
-    history: [
-      { date: '2025-11-09', action: 'Loan Disbursed', amount: 500 },
-      { date: '2025-11-30', action: 'Full Repayment Received', amount: 650 }
-    ]
-  },
-  {
-    id: 'T008',
-    borrowerName: 'Viwe',
-    idNumber: '9403120007083',
-    physicalAddress: 'Alice, South Africa',
-    borrowerNumber: '0768014266',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 500,
-    interestRate: 0,
-    penaltyRate: 5,
-    totalRepayment: 500,
-    startDate: '2025-10-03',
-    dueDate: '2025-10-17',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    history: [
-      { date: '2025-10-03', action: 'Loan Disbursed', amount: 500 },
-      { date: '2025-10-17', action: 'Full Repayment Received', amount: 500 }
-    ]
-  },
-  {
-    id: 'T009',
-    borrowerName: 'Aretha',
-    idNumber: '9104050012089',
-    physicalAddress: 'Beacon Bay, East London',
-    borrowerNumber: '0740124606',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 3000,
-    interestRate: 0,
-    penaltyRate: 5,
-    totalRepayment: 3000,
-    startDate: '2025-12-02',
-    dueDate: '2025-12-05',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '',
-    history: [
-      { date: '2025-12-02', action: 'Loan Disbursed', amount: 3000 },
-      { date: '2025-12-05', action: 'Full Repayment Received', amount: 3000 }
-    ]
-  },
-  {
-    id: 'T010',
-    borrowerName: 'A Mangweni',
-    idNumber: '8907120013081',
-    physicalAddress: 'Zwelitsha, King Williams Town',
-    borrowerNumber: '0840704310',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 500,
-    interestRate: 50,
-    penaltyRate: 5,
-    totalRepayment: 750,
-    startDate: '2025-12-02',
-    dueDate: '2025-12-15',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '',
-    history: [
-      { date: '2025-12-02', action: 'Loan Disbursed', amount: 500 },
-      { date: '2025-12-15', action: 'Full Repayment Received', amount: 750 }
     ]
   },
   {
@@ -286,216 +82,8 @@ export const INITIAL_LOANS: Loan[] = [
     dueDate: '2025-12-20',
     status: RepaymentStatus.OVERDUE,
     applicationStatus: ApplicationStatus.APPROVED,
-    notes: '40% for Aretha',
     history: [
       { date: '2025-12-01', action: 'Loan Disbursed', amount: 3000 }
-    ]
-  },
-  {
-    id: 'T012',
-    borrowerName: 'Mangweni',
-    idNumber: '8907120013081',
-    physicalAddress: 'Zwelitsha, King Williams Town',
-    borrowerNumber: '0840704310',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 2000,
-    interestRate: 60,
-    penaltyRate: 5,
-    totalRepayment: 3200,
-    startDate: '2025-12-01',
-    dueDate: '2025-12-23',
-    status: RepaymentStatus.OVERDUE,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '40% for Aretha',
-    history: [
-      { date: '2025-12-01', action: 'Loan Disbursed', amount: 2000 }
-    ]
-  },
-  {
-    id: 'T013',
-    borrowerName: 'Moyakhe',
-    idNumber: '8204200004082',
-    physicalAddress: 'Gqeberha, South Africa',
-    borrowerNumber: '0815676183',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 1500,
-    interestRate: 30,
-    penaltyRate: 5,
-    totalRepayment: 1950,
-    startDate: '2025-12-01',
-    dueDate: '2025-12-25',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '20% for Aretha',
-    history: [
-      { date: '2025-12-01', action: 'Loan Disbursed', amount: 1500 },
-      { date: '2025-12-25', action: 'Full Repayment Received', amount: 1950 }
-    ]
-  },
-  {
-    id: 'T014',
-    borrowerName: 'Nkqwitha',
-    idNumber: '9005150015084',
-    physicalAddress: 'Qonce, South Africa',
-    borrowerNumber: '0789001673',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 400,
-    interestRate: 30,
-    penaltyRate: 5,
-    totalRepayment: 520,
-    startDate: '2025-12-01',
-    dueDate: '2025-12-12',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '20% for Aretha',
-    history: [
-      { date: '2025-12-01', action: 'Loan Disbursed', amount: 400 },
-      { date: '2025-12-12', action: 'Full Repayment Received', amount: 520 }
-    ]
-  },
-  {
-    id: 'T015',
-    borrowerName: 'Tito',
-    idNumber: '8511100006085',
-    physicalAddress: 'Butterworth, South Africa',
-    borrowerNumber: '0605679674',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 5000,
-    interestRate: 30,
-    penaltyRate: 5,
-    totalRepayment: 6500,
-    startDate: '2025-12-04',
-    dueDate: '2025-12-13',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '',
-    history: [
-      { date: '2025-12-04', action: 'Loan Disbursed', amount: 5000 },
-      { date: '2025-12-13', action: 'Full Repayment Received', amount: 6500 }
-    ]
-  },
-  {
-    id: 'T016',
-    borrowerName: 'Ms S Nkila',
-    idNumber: '9201010001081',
-    physicalAddress: 'East London, South Africa',
-    borrowerNumber: '0660710211',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 400,
-    interestRate: 50,
-    penaltyRate: 5,
-    totalRepayment: 600,
-    startDate: '2025-12-09',
-    dueDate: '2025-12-28',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '',
-    history: [
-      { date: '2025-12-09', action: 'Loan Disbursed', amount: 400 },
-      { date: '2025-12-28', action: 'Full Repayment Received', amount: 600 }
-    ]
-  },
-  {
-    id: 'T017',
-    borrowerName: 'Agcinile Rigala',
-    idNumber: '8802280016083',
-    physicalAddress: 'Mthatha, South Africa',
-    borrowerNumber: '0718400654',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 5000,
-    interestRate: 50,
-    penaltyRate: 5,
-    totalRepayment: 7500,
-    startDate: '2025-12-15',
-    dueDate: '2025-12-25',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '',
-    history: [
-      { date: '2025-12-15', action: 'Loan Disbursed', amount: 5000 },
-      { date: '2025-12-25', action: 'Full Repayment Received', amount: 7500 }
-    ]
-  },
-  {
-    id: 'T018',
-    borrowerName: 'Aretha',
-    idNumber: '9104050012089',
-    physicalAddress: 'Beacon Bay, East London',
-    borrowerNumber: '0740124606',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 200,
-    interestRate: 0,
-    penaltyRate: 5,
-    totalRepayment: 200,
-    startDate: '2025-12-31',
-    dueDate: '2026-01-02',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '',
-    history: [
-      { date: '2025-12-31', action: 'Loan Disbursed', amount: 200 },
-      { date: '2026-01-02', action: 'Full Repayment Received', amount: 200 }
-    ]
-  },
-  {
-    id: 'T019',
-    borrowerName: 'Tito',
-    idNumber: '8511100006085',
-    physicalAddress: 'Butterworth, South Africa',
-    borrowerNumber: '0605679674',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 2000,
-    interestRate: 30,
-    penaltyRate: 5,
-    totalRepayment: 2000,
-    startDate: '2026-01-10',
-    dueDate: '2026-01-12',
-    status: RepaymentStatus.PAID,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '',
-    history: [
-      { date: '2026-01-10', action: 'Loan Disbursed', amount: 2000 },
-      { date: '2026-01-12', action: 'Full Repayment Received', amount: 2000 }
-    ]
-  },
-  {
-    id: 'T020',
-    borrowerName: 'A Mangweni',
-    idNumber: '8907120013081',
-    physicalAddress: 'Zwelitsha, King Williams Town',
-    borrowerNumber: '0840704310',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 400,
-    interestRate: 30,
-    penaltyRate: 5,
-    totalRepayment: 520,
-    startDate: '2026-01-14',
-    dueDate: '2026-01-31',
-    status: RepaymentStatus.PENDING,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '',
-    history: [
-      { date: '2026-01-14', action: 'Loan Disbursed', amount: 400 }
-    ]
-  },
-  {
-    id: 'T021',
-    borrowerName: 'Ovayo Sonqishe',
-    idNumber: '9801200017085',
-    physicalAddress: 'Mthatha, South Africa',
-    borrowerNumber: '0673975780',
-    payoutMethod: PayoutMethod.MOBILE,
-    amountLoaned: 300,
-    interestRate: 30,
-    penaltyRate: 5,
-    totalRepayment: 390,
-    startDate: '2026-01-14',
-    dueDate: '2026-01-31',
-    status: RepaymentStatus.PENDING,
-    applicationStatus: ApplicationStatus.APPROVED,
-    notes: '',
-    history: [
-      { date: '2026-01-14', action: 'Loan Disbursed', amount: 300 }
     ]
   }
 ];
@@ -564,6 +152,10 @@ export const TRANSLATIONS = {
     prefOverdueDesc: 'Get notified when a loan is overdue.',
     prefSMSAuto: 'WhatsApp Automation',
     prefSMSDesc: 'Send automatic reminders via WhatsApp.',
+    prefSMSUpdates: 'SMS Status Updates',
+    prefSMSUpdatesDesc: 'Send automated SMS when loan status changes.',
+    prefEmailUpdates: 'Email Status Updates',
+    prefEmailUpdatesDesc: 'Send automated emails when loan status changes.',
     prefReports: 'Email Reports',
     prefReportsDesc: 'Weekly summary of your portfolio sent to montiovayo@gmail.com.',
     prefEmailNewApp: 'Email: New Applications',
@@ -644,8 +236,12 @@ export const TRANSLATIONS = {
     prefOverdueDesc: 'Fumana isaziso xa imali idlulile ixesha.',
     prefSMSAuto: 'I-WhatsApp Automation',
     prefSMSDesc: 'Thumela izikhumbuzo nge-WhatsApp.',
+    prefSMSUpdates: 'Izaziso ze-SMS',
+    prefSMSUpdatesDesc: 'Thumela i-SMS xa imeko yemali itshintsha.',
+    prefEmailUpdates: 'Izaziso ze-Email',
+    prefEmailUpdatesDesc: 'Thumela i-email xa imeko yemali itshintsha.',
     prefReports: 'Iingxelo nge-Email',
-    prefReportsDesc: 'Isishwankathelo seveki semali yakho sithunyelwa ku-montiovayo@gmail.com.',
+    prefReportsDesc: 'Isishwankathelo seveki semali zakho sithunyelwa ku-montiovayo@gmail.com.',
     prefEmailNewApp: 'Email: Izicelo Ezintsha',
     prefEmailNewAppDesc: 'Fumana i-email xa umntu efaka isicelo.',
     prefEmailOverdue: 'Email: Ezidlulileyo Ixesha',

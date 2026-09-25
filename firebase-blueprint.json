@@ -1,0 +1,102 @@
+{
+  "entities": {
+    "borrowers": {
+      "title": "Borrower Profile",
+      "description": "Registered borrower profiles and trust score records",
+      "type": "object",
+      "properties": {
+        "idNumber": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "email": { "type": "string" },
+        "profilePhoto": { "type": "string" },
+        "score": { "type": "number" },
+        "employer": { "type": "string" },
+        "employmentStatus": { "type": "string" },
+        "monthlyIncome": { "type": "number" },
+        "alternativeNumber": { "type": "string" },
+        "payoutMethod": { "type": "string" },
+        "bankDetails": { "type": "string" },
+        "notes": { "type": "string" },
+        "kycVerified": { "type": "boolean" },
+        "kycIdVerified": { "type": "boolean" },
+        "kycAddressVerified": { "type": "boolean" },
+        "kycFaceVerified": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["idNumber", "name"]
+    },
+    "loans": {
+      "title": "Loan Commitment",
+      "description": "Active, pending, and past microloan records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "borrowerName": { "type": "string" },
+        "idNumber": { "type": "string" },
+        "physicalAddress": { "type": "string" },
+        "borrowerNumber": { "type": "string" },
+        "profilePhoto": { "type": "string" },
+        "email": { "type": "string" },
+        "alternativeNumber": { "type": "string" },
+        "employer": { "type": "string" },
+        "employmentStatus": { "type": "string" },
+        "payoutMethod": { "type": "string" },
+        "bankDetails": { "type": "string" },
+        "amountLoaned": { "type": "number" },
+        "interestRate": { "type": "number" },
+        "penaltyRate": { "type": "number" },
+        "totalRepayment": { "type": "number" },
+        "startDate": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "status": { "type": "string" },
+        "applicationStatus": { "type": "string" },
+        "notes": { "type": "string" },
+        "history": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "borrowerName", "idNumber", "amountLoaned", "dueDate"]
+    },
+    "settings": {
+      "title": "Application Settings",
+      "description": "Global administrator and notification configuration",
+      "type": "object",
+      "properties": {
+        "overdueAlerts": { "type": "boolean" },
+        "whatsappAutomation": { "type": "boolean" },
+        "whatsappAutoOverdue": { "type": "boolean" },
+        "whatsappAutoApproval": { "type": "boolean" },
+        "whatsappAutoOpen": { "type": "boolean" },
+        "emailReports": { "type": "boolean" },
+        "emailNewAppAlerts": { "type": "boolean" },
+        "emailOverdueAlerts": { "type": "boolean" },
+        "darkMode": { "type": "boolean" },
+        "adminVaultKey": { "type": "string" },
+        "smsStatusUpdates": { "type": "boolean" },
+        "emailStatusUpdates": { "type": "boolean" },
+        "lenderPhoto": { "type": "string" }
+      }
+    },
+    "whatsapp_notifications": {
+      "title": "WhatsApp Notification Record",
+      "description": "Triggered and logged WhatsApp automated notifications",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "loanId": { "type": "string" },
+        "borrowerName": { "type": "string" },
+        "borrowerNumber": { "type": "string" },
+        "type": { "type": "string" },
+        "triggerReason": { "type": "string" },
+        "message": { "type": "string" },
+        "waUrl": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "loanId", "borrowerNumber", "type", "message"]
+    }
+  }
+}

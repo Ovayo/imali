@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
-import { Menu, Wallet, Users, LayoutDashboard, Settings, Bell, Languages, Calculator, ArrowLeftRight, UserCheck, ShieldCheck, X, RefreshCw, Loader2, LogOut } from 'lucide-react';
+import { Menu, Wallet, Users, LayoutDashboard, Settings, Bell, Languages, Calculator, ArrowLeftRight, UserCheck, ShieldCheck, X, RefreshCw, Loader2, LogOut, Camera, Cloud, Database, Smartphone } from 'lucide-react';
 import { Language, UserRole } from '../types';
 import { TRANSLATIONS } from '../constants';
 
@@ -14,10 +14,35 @@ interface LayoutProps {
   toggleRole: () => void;
   onRefresh?: () => Promise<void>;
   userName?: string;
+  profilePhoto?: string;
+  onOpenPhotoCapture?: () => void;
   overdueCount?: number;
+  isCloudConnected?: boolean;
+  onOpenDataRecovery?: () => void;
+  onOpenWhatsAppHub?: () => void;
+  whatsAppNotificationsCount?: number;
+  onOpenEmiCalculator?: () => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, language, setLanguage, userRole, toggleRole, onRefresh, userName, overdueCount }) => {
+const Layout: React.FC<LayoutProps> = ({ 
+  children, 
+  activeTab, 
+  setActiveTab, 
+  language, 
+  setLanguage, 
+  userRole, 
+  toggleRole, 
+  onRefresh, 
+  userName, 
+  profilePhoto,
+  onOpenPhotoCapture,
+  overdueCount,
+  isCloudConnected = false,
+  onOpenDataRecovery,
+  onOpenWhatsAppHub,
+  whatsAppNotificationsCount,
+  onOpenEmiCalculator
+}) => {
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -42,8 +67,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
   const menuItems = [
     { id: 'dashboard', label: t.dashboard, icon: LayoutDashboard, mobileLabel: 'Home' },
     { id: 'loans', label: userRole === UserRole.LENDER ? t.loans : 'My Loans', icon: Wallet, mobileLabel: 'Loans' },
+    { 
+      id: 'borrowers', 
+      label: userRole === UserRole.LENDER ? t.borrowers : 'My Profile', 
+      icon: userRole === UserRole.LENDER ? Users : UserCheck, 
+      mobileLabel: userRole === UserRole.LENDER ? 'People' : 'Profile' 
+    },
     ...(userRole === UserRole.LENDER ? [
-      { id: 'borrowers', label: t.borrowers, icon: Users, mobileLabel: 'People' },
       { id: 'settings', label: t.settings, icon: Settings, mobileLabel: 'Menu' }
     ] : [
       { id: 'calculator', label: t.loanCalculator, icon: Calculator, mobileLabel: 'Calc' }
@@ -87,34 +117,97 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
   return (
     <div className="h-screen w-screen flex flex-col md:flex-row bg-[#fdfcfb] xhosa-pattern overflow-hidden">
       {/* Mobile Header */}
-      <header className="md:hidden bg-white/80 backdrop-blur-md border-b border-gray-100 p-4 flex justify-between items-center fixed top-0 left-0 right-0 z-[60] shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="bg-indigo-600 p-1.5 rounded-lg shadow-lg">
-             <Wallet size={18} className="text-white" />
+      <header className="md:hidden bg-white/90 backdrop-blur-md border-b border-gray-100/80 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 flex justify-between items-center fixed top-0 left-0 right-0 z-[60] shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
+        <div className="flex items-center gap-2.5">
+          <div className="bg-indigo-600 p-2 rounded-xl shadow-md text-white">
+            <Wallet size={18} />
           </div>
-          <h1 className="text-lg font-black tracking-tighter uppercase text-gray-900">imali</h1>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-lg font-black tracking-tight uppercase text-gray-900 leading-none font-heading">imali</h1>
+              <div className={`flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full border ${isCloudConnected ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${isCloudConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+                {isCloudConnected ? 'Live' : 'Connecting'}
+              </div>
+            </div>
+            <p className="text-[9px] text-gray-400 font-semibold tracking-wider uppercase">Micro-Lending Hub</p>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-           <button 
-             onClick={() => setLanguage(language === Language.EN ? Language.XH : Language.EN)}
-             className="p-2 bg-gray-50 text-gray-400 rounded-full border border-gray-100"
-           >
-             <Languages size={16} />
-           </button>
-           <button 
-             onClick={toggleRole}
-             className="flex items-center gap-1.5 text-[10px] font-black uppercase px-4 py-2 rounded-full bg-[#1a1a1a] text-white shadow-lg active:scale-95 transition-all"
-           >
-             {userRole === UserRole.BORROWER ? <LogOut size={12} /> : <ShieldCheck size={12} />}
-             {userRole === UserRole.BORROWER ? 'Log Out' : 'Admin'}
-           </button>
+
+        <div className="flex items-center gap-2">
+          {onOpenEmiCalculator && (
+            <button
+              onClick={onOpenEmiCalculator}
+              title="Loan EMI & Penalty Calculator"
+              className="w-10 h-10 min-w-[40px] flex items-center justify-center bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-xl border border-amber-200 active:scale-95 transition-all shadow-sm"
+            >
+              <Calculator size={17} />
+            </button>
+          )}
+
+          {onOpenWhatsAppHub && userRole === UserRole.LENDER && (
+            <button
+              onClick={onOpenWhatsAppHub}
+              title="Automated WhatsApp Service Console"
+              className="relative w-10 h-10 min-w-[40px] flex items-center justify-center bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl border border-emerald-200 active:scale-95 transition-all"
+            >
+              <Smartphone size={17} />
+              {whatsAppNotificationsCount !== undefined && whatsAppNotificationsCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-600 text-white rounded-full text-[9px] font-black flex items-center justify-center border-2 border-white">
+                  {whatsAppNotificationsCount > 9 ? '9+' : whatsAppNotificationsCount}
+                </span>
+              )}
+            </button>
+          )}
+
+          {onOpenDataRecovery && (
+            <button
+              onClick={onOpenDataRecovery}
+              title="Database & Data Recovery"
+              className="w-10 h-10 min-w-[40px] flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100 active:scale-95 transition-all"
+            >
+              <Database size={17} />
+            </button>
+          )}
+
+          {onOpenPhotoCapture && (
+            <button
+              onClick={onOpenPhotoCapture}
+              title="Capture profile photo"
+              className="relative w-10 h-10 min-w-[40px] rounded-xl overflow-hidden border border-gray-200 shadow-sm flex items-center justify-center bg-indigo-50 text-indigo-600 active:scale-95 transition-transform"
+            >
+              {profilePhoto ? (
+                <img src={profilePhoto} alt={displayUserName} className="w-full h-full object-cover" />
+              ) : (
+                <span className="font-black text-xs">{displayUserName[0]}</span>
+              )}
+              <div className="absolute inset-0 bg-black/35 opacity-0 active:opacity-100 flex items-center justify-center transition-opacity text-white">
+                <Camera size={13} />
+              </div>
+            </button>
+          )}
+
+          <button 
+            onClick={() => setLanguage(language === Language.EN ? Language.XH : Language.EN)}
+            className="w-10 h-10 min-w-[40px] flex items-center justify-center bg-gray-50 text-gray-600 rounded-xl border border-gray-100 active:scale-95 transition-all"
+            title="Switch Language (Xhosa / English)"
+          >
+            <Languages size={17} />
+          </button>
+
+          <button 
+            onClick={toggleRole}
+            className="flex items-center gap-1.5 text-[10px] font-black uppercase px-3.5 h-10 min-h-[40px] rounded-xl bg-gray-900 text-white shadow-md active:scale-95 transition-all tracking-wider"
+          >
+            {userRole === UserRole.BORROWER ? <LogOut size={13} /> : <ShieldCheck size={13} />}
+            <span>{userRole === UserRole.BORROWER ? 'Log Out' : 'Lock Admin'}</span>
+          </button>
         </div>
       </header>
 
       {/* Sidebar (Desktop Only) */}
       <aside className="hidden md:flex flex-col w-72 bg-[#1a1a1a] text-white h-full sticky top-0 shadow-2xl relative overflow-hidden flex-shrink-0 min-w-0">
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none xhosa-pattern rotate-45 scale-150" />
-        <div className="bead-accent absolute top-0 left-0 w-full" />
         <div className="p-8 relative z-10 flex-1 flex flex-col overflow-y-auto custom-scrollbar">
           <div className="flex justify-between items-start mb-10">
             <div className="flex items-center gap-3">
@@ -122,7 +215,16 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
                 <div className="absolute inset-0 opacity-20 xhosa-accent-pattern scale-50 group-hover:scale-100 transition-transform duration-500" />
                 <Wallet size={28} className="text-white relative z-10" />
               </div>
-              <div><h1 className="text-2xl font-black tracking-tighter uppercase">imali</h1><p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.2em]">Micro-Lending</p></div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-black tracking-tighter uppercase">imali</h1>
+                  <span className={`w-2 h-2 rounded-full ${isCloudConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} title={isCloudConnected ? 'Connected to Cloud' : 'Connecting to Cloud'} />
+                </div>
+                <p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.2em] flex items-center gap-1.5">
+                  Micro-Lending
+                  {isCloudConnected && <span className="text-[9px] text-emerald-400/80 font-normal lowercase tracking-normal">cloud active</span>}
+                </p>
+              </div>
             </div>
           </div>
           <nav className="space-y-2 mb-8">
@@ -133,7 +235,33 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
               </button>
             ))}
           </nav>
-          <div className="mt-auto space-y-4">
+          <div className="mt-auto space-y-3">
+            {onOpenEmiCalculator && (
+              <button 
+                onClick={onOpenEmiCalculator}
+                className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-amber-950/40 to-amber-900/30 hover:from-amber-900/60 hover:to-amber-800/50 border border-amber-500/30 rounded-2xl text-amber-300 hover:text-white transition-all text-xs font-black uppercase tracking-wider group shadow-sm"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Calculator size={16} className="text-amber-400 group-hover:scale-110 transition-transform" />
+                  <span>Loan EMI Calculator</span>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono font-bold">5%/wk</span>
+              </button>
+            )}
+
+            {onOpenDataRecovery && (
+              <button 
+                onClick={onOpenDataRecovery}
+                className="w-full flex items-center justify-between px-4 py-3 bg-indigo-950/40 hover:bg-indigo-900/60 border border-indigo-500/30 rounded-2xl text-indigo-300 hover:text-white transition-all text-xs font-black uppercase tracking-wider group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Database size={16} className="text-indigo-400 group-hover:scale-110 transition-transform" />
+                  <span>Data Recovery & Sync</span>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">DB</span>
+              </button>
+            )}
+
             <button onClick={toggleRole} className="w-full p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all group relative overflow-hidden shadow-2xl">
               <div className="absolute inset-0 opacity-10 xhosa-pattern-sm" />
               <div className="flex items-center justify-between mb-2">
@@ -145,20 +273,66 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
                   {userRole === UserRole.BORROWER ? <LogOut size={18} /> : <ShieldCheck size={18} />}
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-black text-white uppercase tracking-tight">{userRole === UserRole.BORROWER ? 'Log Out' : 'Borrower View'}</p>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{userRole === UserRole.BORROWER ? 'Exit Session' : 'Switch Mode'}</p>
+                  <p className="text-sm font-black text-white uppercase tracking-tight">{userRole === UserRole.BORROWER ? 'Log Out' : 'Exit Admin'}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{userRole === UserRole.BORROWER ? 'Exit Session' : 'Lock Admin Ledger'}</p>
                 </div>
               </div>
             </button>
+
+            {onOpenWhatsAppHub && userRole === UserRole.LENDER && (
+              <button
+                type="button"
+                onClick={onOpenWhatsAppHub}
+                className="w-full p-3 bg-emerald-950/40 border border-emerald-500/30 hover:border-emerald-500/50 rounded-2xl flex items-center justify-between text-left hover:bg-emerald-950/60 transition-all group active:scale-98"
+                title="Open WhatsApp Notification Service Console"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                    <Smartphone size={15} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-white truncate">WhatsApp Service</p>
+                    <p className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Auto-Reminders
+                    </p>
+                  </div>
+                </div>
+                {whatsAppNotificationsCount !== undefined && whatsAppNotificationsCount > 0 ? (
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500 text-white shrink-0">
+                    {whatsAppNotificationsCount}
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">
+                    LIVE
+                  </span>
+                )}
+              </button>
+            )}
             
             <div className="bg-black/20 rounded-2xl border border-white/5 p-4 relative overflow-hidden">
               <div className="absolute bottom-0 right-0 p-1 opacity-5 xhosa-pattern-sm" />
               <div className="flex items-center justify-between mb-4"><p className="text-[9px] text-gray-400 uppercase tracking-widest font-black">Ulwimi</p><button onClick={() => setLanguage(language === Language.EN ? Language.XH : Language.EN)} className="flex items-center gap-1.5 text-xs font-black text-indigo-400 hover:text-indigo-300 transition-colors uppercase"><Languages size={14} />{language === Language.EN ? 'isiXhosa' : 'English'}</button></div>
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-lg border border-white/10 relative overflow-hidden ${userRole === UserRole.LENDER ? 'bg-indigo-600' : 'bg-emerald-600'}`}>
-                  {displayUserName[0]}
+                <div className="relative group">
+                  <div className={`w-11 h-11 rounded-full flex items-center justify-center font-black text-white shadow-lg border border-white/10 relative overflow-hidden ${userRole === UserRole.LENDER ? 'bg-indigo-600' : 'bg-emerald-600'}`}>
+                    {profilePhoto ? (
+                      <img src={profilePhoto} alt={displayUserName} className="w-full h-full object-cover" />
+                    ) : (
+                      displayUserName[0]
+                    )}
+                  </div>
+                  {onOpenPhotoCapture && (
+                    <button
+                      onClick={onOpenPhotoCapture}
+                      title="Update profile photo"
+                      className="absolute -bottom-1 -right-1 w-5 h-5 bg-indigo-600 hover:bg-indigo-500 rounded-full flex items-center justify-center text-white border border-white/30 shadow-md transition-all active:scale-90"
+                    >
+                      <Camera size={10} />
+                    </button>
+                  )}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="font-black text-sm uppercase tracking-tight text-white truncate">{displayUserName}</p>
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest truncate">{userRole === UserRole.LENDER ? 'Village Lender' : 'Verified Borrower'}</p>
                 </div>
@@ -171,12 +345,11 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
       {/* Main Content Area */}
       <main 
         ref={scrollContainerRef}
-        className="flex-1 flex flex-col h-full overflow-y-auto overflow-x-hidden relative custom-scrollbar pt-[68px] md:pt-0 pb-20 md:pb-0 min-w-0"
+        className="flex-1 flex flex-col h-full overflow-y-auto overflow-x-hidden relative custom-scrollbar momentum-scroll pt-[calc(4.5rem+env(safe-area-inset-top))] md:pt-0 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0 min-w-0"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="bead-accent z-20 sticky top-0 md:hidden" />
         
         <div 
           className="absolute left-0 right-0 z-40 flex items-center justify-center pointer-events-none transition-all duration-200"
@@ -194,34 +367,34 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
               <RefreshCw className={`text-indigo-600 ${pullDistance > 60 ? 'rotate-180' : 'rotate-0'} transition-transform duration-300`} size={20} />
             )}
             <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 pr-1">
-              {isRefreshing ? 'Refreshing...' : pullDistance > 60 ? 'Release' : 'Pull'}
+              {isRefreshing ? 'Refreshing...' : pullDistance > 60 ? 'Release' : 'Pull to Refresh'}
             </span>
           </div>
         </div>
 
-        <div className="flex-1 p-4 md:p-10 relative overflow-x-hidden">
+        <div className="flex-1 p-3.5 sm:p-6 md:p-10 relative overflow-x-hidden">
           <div className="absolute top-0 right-0 w-96 h-96 opacity-[0.02] pointer-events-none xhosa-accent-pattern scale-150 rotate-12 -z-10" />
           
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+          <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 mb-6 md:mb-10">
             <div className="min-w-0">
-              <h2 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight uppercase truncate">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 tracking-tight uppercase truncate font-heading">
                 {activeTab === 'dashboard' && (userRole === UserRole.LENDER 
                   ? `${getGreeting()}, ${t.dashboard}` 
                   : `${getGreeting()}, ${displayUserName.split(' ').filter(Boolean).pop()} 😊`)}
                 {activeTab === 'loans' && (userRole === UserRole.LENDER ? t.loans : 'My Active Loans')}
-                {activeTab === 'borrowers' && t.borrowers}
+                {activeTab === 'borrowers' && (userRole === UserRole.LENDER ? 'Borrower Network' : 'My Credit Profile')}
                 {activeTab === 'calculator' && t.loanCalculator}
                 {activeTab === 'settings' && t.settings}
               </h2>
-              <div className="flex items-center gap-3 mt-1">
-                <p className="text-gray-500 text-[11px] md:text-sm font-medium truncate max-w-md">
-                  {activeTab === 'dashboard' && (userRole === UserRole.LENDER ? t.statsDesc : 'Your current financial standing.')}
-                  {activeTab === 'loans' && 'Ledger of current commitments'}
-                  {activeTab === 'borrowers' && 'Your trusted community network'}
-                  {activeTab === 'calculator' && 'Financial growth projections'}
-                  {activeTab === 'settings' && 'Operational motifs'}
+              <div className="flex items-center gap-2 sm:gap-3 mt-1">
+                <p className="text-gray-500 text-[11px] sm:text-xs md:text-sm font-medium truncate max-w-md">
+                  {activeTab === 'dashboard' && (userRole === UserRole.LENDER ? t.statsDesc : 'Your live financial standing & credit standing.')}
+                  {activeTab === 'loans' && 'Ledger of all active and historical commitments'}
+                  {activeTab === 'borrowers' && (userRole === UserRole.LENDER ? 'Verified community network and credit records' : 'Your personal account dossier and limit tier')}
+                  {activeTab === 'calculator' && 'Financial growth & installment projections'}
+                  {activeTab === 'settings' && 'Platform operational motifs and security'}
                 </p>
-                <div className="h-0.5 w-12 beaded-divider opacity-40 shrink-0" />
+                <div className="h-0.5 w-8 sm:w-12 beaded-divider opacity-40 shrink-0" />
               </div>
             </div>
             <div className="hidden md:flex gap-4">
@@ -234,27 +407,34 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, lang
           </header>
           {children}
         </div>
-      </header>
+      </main>
 
-      {/* Mobile Bottom Navigation Bar (Full-width Dock) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 w-full z-[100] bg-[#1a1a1a]/95 backdrop-blur-xl border-t border-white/10 overflow-hidden flex items-stretch justify-around animate-in slide-in-from-bottom-5 duration-300 h-20 shadow-[0_-5px_25px_rgba(0,0,0,0.2)]">
-        <div className="absolute inset-0 opacity-[0.05] xhosa-pattern-sm pointer-events-none" />
+      {/* Mobile Bottom Navigation Bar (Full-width Dock with Safe-Area & Touch Targets) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 w-full z-[100] bg-[#121316]/95 backdrop-blur-2xl border-t border-white/10 overflow-hidden flex items-stretch justify-around animate-in slide-in-from-bottom-5 duration-300 pt-1.5 pb-[max(0.65rem,env(safe-area-inset-bottom))] shadow-[0_-8px_30px_rgba(0,0,0,0.35)]">
+        <div className="absolute inset-0 opacity-[0.04] xhosa-pattern-sm pointer-events-none" />
         {menuItems.map((item) => {
           const isActive = activeTab === item.id;
+          const showBadge = item.id === 'loans' && typeof overdueCount === 'number' && overdueCount > 0;
+
           return (
             <button 
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex-1 flex flex-col items-center justify-center gap-1.5 transition-all relative group ${isActive ? 'text-white' : 'text-gray-500'}`}
+              className={`flex-1 min-h-[50px] py-1 flex flex-col items-center justify-center gap-1 transition-all relative group select-none active:scale-95 ${isActive ? 'text-white' : 'text-gray-400 hover:text-gray-200'}`}
             >
-              <div className={`p-2 rounded-xl transition-all duration-300 ${isActive ? 'bg-indigo-600 scale-110' : 'group-active:scale-90'}`}>
-                <item.icon size={20} />
+              <div className={`p-1.5 rounded-xl transition-all duration-300 relative ${isActive ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 scale-105' : 'group-hover:text-white'}`}>
+                <item.icon size={19} />
+                {showBadge && (
+                  <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-md animate-pulse">
+                    {overdueCount}
+                  </span>
+                )}
               </div>
-              <span className={`text-[9px] font-black uppercase tracking-widest ${isActive ? 'opacity-100' : 'opacity-60'}`}>
+              <span className={`text-[10px] font-bold tracking-tight uppercase leading-none transition-opacity ${isActive ? 'opacity-100 text-indigo-300 font-black' : 'opacity-70'}`}>
                 {item.mobileLabel}
               </span>
               {isActive && (
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-indigo-600 rounded-b-full shadow-[0_0_15px_rgba(79,70,229,0.5)]" />
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-10 h-0.5 bg-indigo-500 rounded-b-full shadow-[0_0_12px_rgba(99,102,241,0.8)]" />
               )}
             </button>
           );
