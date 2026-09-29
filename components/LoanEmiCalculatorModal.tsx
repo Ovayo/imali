@@ -414,89 +414,116 @@ export const LoanEmiCalculatorModal: React.FC<LoanEmiCalculatorModalProps> = ({
         transition={{ type: 'spring', damping: 28, stiffness: 320, mass: 0.85 }}
         className="bg-white w-full max-w-4xl rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[94vh] mt-auto sm:my-auto border border-gray-100"
       >
-        {/* Mobile Pull Handle */}
-        <div className="sm:hidden flex justify-center pt-3 pb-1">
-          <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
-        </div>
-
         {/* Modal Header */}
-        <div className="p-5 sm:p-7 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white relative overflow-hidden">
-          <div className="absolute right-0 top-0 bottom-0 opacity-10 pointer-events-none flex items-center pr-8">
+        <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white border-b border-slate-800 px-6 py-6 sm:px-8 sm:py-7">
+          {/* Mobile Pull Handle */}
+          <div className="sm:hidden flex justify-center pb-3 relative z-10">
+            <div className="w-12 h-1 bg-white/20 rounded-full" />
+          </div>
+
+          {/* Ambient Lighting & Subtle Watermark */}
+          <div className="absolute right-0 top-0 bottom-0 opacity-[0.025] pointer-events-none flex items-center pr-6">
             <Calculator size={160} />
           </div>
+          <div className="absolute -top-16 -left-16 w-56 h-56 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="flex items-center gap-3.5 relative z-10">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shadow-inner">
-              <Calculator size={24} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-xl sm:text-2xl font-black uppercase tracking-tight font-heading">
-                  Loan EMI Calculator
-                </h3>
-                <span className="bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full tracking-wider">
-                  Prospective Borrower
-                </span>
+          {/* Top Row: Icon, Context & Close Action */}
+          <div className="flex items-center justify-between gap-4 relative z-10">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shadow-inner shrink-0">
+                <Calculator size={22} />
               </div>
-              <p className="text-xs text-gray-300 mt-0.5 flex items-center gap-1.5 font-medium">
-                <span>Plan your microloan installments & understand the penalty fee structure upfront</span>
-              </p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-300 bg-indigo-500/15 border border-indigo-400/20 px-2 py-0.5 rounded-full">
+                    Microloan Simulator
+                  </span>
+                  {borrower?.name && (
+                    <span className="text-xs font-semibold text-slate-300 truncate">
+                      for <strong className="text-white font-bold">{borrower.name}</strong>
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight font-heading text-white truncate">
+                  Loan EMI Calculator
+                </h2>
+              </div>
             </div>
+
+            <button 
+              type="button"
+              onClick={onClose} 
+              className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/10 text-slate-300 hover:text-white flex items-center justify-center transition-all active:scale-95 shrink-0 shadow-sm"
+              title="Close calculator"
+              aria-label="Close calculator"
+            >
+              <X size={18} />
+            </button>
           </div>
 
-          <button 
-            type="button"
-            onClick={onClose} 
-            className="p-2 sm:p-2.5 hover:bg-white/10 rounded-full text-gray-300 hover:text-white transition-colors relative z-10 active:scale-95"
-            title="Close calculator"
-          >
-            <X size={20} />
-          </button>
+          {/* Explanatory Subtitle with breathing room */}
+          <p className="text-xs sm:text-sm text-slate-300 font-normal leading-relaxed mt-3.5 mb-4 max-w-2xl relative z-10">
+            Simulate weekly or monthly installment payments, preview total interest, and verify transparent late penalty limits upfront.
+          </p>
+
+          {/* Clean Unified Loan Parameters Capsule */}
+          <div className="inline-flex flex-wrap items-center gap-y-2 gap-x-4 sm:gap-x-6 px-4 py-2.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm relative z-10 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Interest Rate:</span>
+              <span className="font-mono font-black text-emerald-400">{customInterestRate}% Flat</span>
+            </div>
+            <div className="hidden sm:block w-px h-3.5 bg-white/15" />
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Duration Cap:</span>
+              <span className="font-mono font-black text-indigo-300">1 – 4 Weeks</span>
+            </div>
+            <div className="hidden sm:block w-px h-3.5 bg-white/15" />
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Overdue Penalty:</span>
+              <span className="font-mono font-black text-amber-400">{penaltyRate}% / week</span>
+            </div>
+          </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="px-5 sm:px-8 border-b border-gray-100 bg-gray-50/80 flex items-center gap-2 sm:gap-4 overflow-x-auto custom-scrollbar">
+        {/* Tab Navigation - Spacious & Clean Controls */}
+        <div className="px-6 sm:px-8 py-3 bg-white border-b border-gray-100 flex items-center gap-2 sm:gap-3 overflow-x-auto custom-scrollbar">
           <button
             type="button"
             onClick={() => setActiveTab('calculator')}
-            className={`py-3.5 px-3 text-xs sm:text-sm font-black uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+            className={`py-2 px-4 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'calculator' 
-                ? 'border-indigo-600 text-indigo-600' 
-                : 'border-transparent text-gray-400 hover:text-gray-700'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' 
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100/80 font-bold'
             }`}
           >
-            <Calculator size={16} />
+            <Calculator size={15} />
             <span>Installment Estimator</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('schedule')}
-            className={`py-3.5 px-3 text-xs sm:text-sm font-black uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+            className={`py-2 px-4 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'schedule' 
-                ? 'border-indigo-600 text-indigo-600' 
-                : 'border-transparent text-gray-400 hover:text-gray-700'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20' 
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100/80 font-bold'
             }`}
           >
-            <Table size={16} />
-            <span>Week-by-Week Amortization</span>
-            <span className="text-[10px] px-1.5 py-0.2 bg-indigo-100 text-indigo-700 rounded font-mono font-bold">
-              {calc.safeWeeks} Wks
-            </span>
+            <Table size={15} />
+            <span>Amortization Schedule</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('penalties')}
-            className={`py-3.5 px-3 text-xs sm:text-sm font-black uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${
+            className={`py-2 px-4 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'penalties' 
-                ? 'border-amber-600 text-amber-600' 
-                : 'border-transparent text-gray-400 hover:text-gray-700'
+                ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20' 
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100/80 font-bold'
             }`}
           >
-            <ShieldAlert size={16} />
+            <ShieldAlert size={15} />
             <span>Penalty Fee Structure</span>
-            <span className="text-[10px] px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded font-mono font-bold">5%/wk</span>
           </button>
         </div>
 

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
-import { Menu, Wallet, Users, LayoutDashboard, Settings, Bell, Languages, Calculator, ArrowLeftRight, UserCheck, ShieldCheck, X, RefreshCw, Loader2, LogOut, Camera, Cloud, Database, Smartphone } from 'lucide-react';
+import { Menu, Wallet, Users, LayoutDashboard, Settings, Bell, Languages, Calculator, ArrowLeftRight, UserCheck, ShieldCheck, X, RefreshCw, Loader2, LogOut, Camera, Cloud, Database, Smartphone, Lightbulb } from 'lucide-react';
 import { Language, UserRole } from '../types';
 import { TRANSLATIONS } from '../constants';
 
@@ -22,6 +22,7 @@ interface LayoutProps {
   onOpenWhatsAppHub?: () => void;
   whatsAppNotificationsCount?: number;
   onOpenEmiCalculator?: () => void;
+  onOpenTipsModal?: () => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({ 
@@ -41,7 +42,8 @@ const Layout: React.FC<LayoutProps> = ({
   onOpenDataRecovery,
   onOpenWhatsAppHub,
   whatsAppNotificationsCount,
-  onOpenEmiCalculator
+  onOpenEmiCalculator,
+  onOpenTipsModal
 }) => {
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -160,7 +162,7 @@ const Layout: React.FC<LayoutProps> = ({
             </button>
           )}
 
-          {onOpenDataRecovery && (
+          {onOpenDataRecovery && userRole === UserRole.LENDER && (
             <button
               onClick={onOpenDataRecovery}
               title="Database & Data Recovery"
@@ -249,7 +251,21 @@ const Layout: React.FC<LayoutProps> = ({
               </button>
             )}
 
-            {onOpenDataRecovery && (
+            {onOpenTipsModal && (
+              <button 
+                type="button"
+                onClick={onOpenTipsModal}
+                className="w-full flex items-center justify-between px-4 py-3 bg-amber-950/30 hover:bg-amber-900/50 border border-amber-500/20 rounded-2xl text-amber-300 hover:text-white transition-all text-xs font-black uppercase tracking-wider group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <Lightbulb size={16} className="text-amber-400 group-hover:rotate-12 transition-transform" />
+                  <span>Tips While You Wait</span>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">PRO</span>
+              </button>
+            )}
+
+            {onOpenDataRecovery && userRole === UserRole.LENDER && (
               <button 
                 onClick={onOpenDataRecovery}
                 className="w-full flex items-center justify-between px-4 py-3 bg-indigo-950/40 hover:bg-indigo-900/60 border border-indigo-500/30 rounded-2xl text-indigo-300 hover:text-white transition-all text-xs font-black uppercase tracking-wider group"
@@ -397,12 +413,25 @@ const Layout: React.FC<LayoutProps> = ({
                 <div className="h-0.5 w-8 sm:w-12 beaded-divider opacity-40 shrink-0" />
               </div>
             </div>
-            <div className="hidden md:flex gap-4">
-              <button className="p-3 bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all relative group overflow-hidden border-2 border-transparent hover:border-gray-100">
-                <div className="absolute inset-0 xhosa-pattern-sm opacity-5 pointer-events-none" />
-                <Bell size={20} className="text-gray-600 group-hover:text-indigo-600 transition-colors relative z-10" />
-                <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white relative z-20"></span>
-              </button>
+            <div className="flex items-center gap-2 sm:gap-3">
+              {onOpenTipsModal && (
+                <button
+                  type="button"
+                  onClick={onOpenTipsModal}
+                  className="px-3.5 py-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 text-amber-900 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition-all active:scale-95"
+                  title="Enjoy these tips while you wait"
+                >
+                  <Lightbulb size={15} className="text-amber-600 animate-pulse" />
+                  <span className="hidden sm:inline">Tips While You Wait</span>
+                </button>
+              )}
+              <div className="hidden md:flex gap-4">
+                <button className="p-3 bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all relative group overflow-hidden border-2 border-transparent hover:border-gray-100">
+                  <div className="absolute inset-0 xhosa-pattern-sm opacity-5 pointer-events-none" />
+                  <Bell size={20} className="text-gray-600 group-hover:text-indigo-600 transition-colors relative z-10" />
+                  <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white relative z-20"></span>
+                </button>
+              </div>
             </div>
           </header>
           {children}

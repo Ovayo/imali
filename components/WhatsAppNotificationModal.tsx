@@ -9,7 +9,8 @@ import {
   PartyPopper, 
   Smartphone, 
   Clock, 
-  Send
+  Send,
+  Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -29,6 +30,7 @@ export const WhatsAppNotificationModal: React.FC<WhatsAppNotificationModalProps>
   if (!notification) return null;
 
   const isOverdue = notification.type === 'overdue_reminder';
+  const isQuickPay = notification.type === 'quick_pay';
 
   const handleCopy = () => {
     navigator.clipboard.writeText(notification.message);
@@ -66,27 +68,39 @@ export const WhatsAppNotificationModal: React.FC<WhatsAppNotificationModalProps>
         >
           {/* Header Banner */}
           <div className={`p-6 sm:p-7 border-b flex items-center justify-between ${
-            isOverdue ? 'bg-rose-50/80 border-rose-100' : 'bg-emerald-50/80 border-emerald-100'
+            isOverdue 
+              ? 'bg-rose-50/80 border-rose-100' 
+              : isQuickPay
+              ? 'bg-teal-50/80 border-teal-100'
+              : 'bg-emerald-50/80 border-emerald-100'
           }`}>
             <div className="flex items-center gap-3">
               <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${
-                isOverdue ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
+                isOverdue 
+                  ? 'bg-rose-600 text-white' 
+                  : isQuickPay
+                  ? 'bg-teal-600 text-white'
+                  : 'bg-emerald-600 text-white'
               }`}>
-                {isOverdue ? <AlertTriangle size={24} /> : <PartyPopper size={24} />}
+                {isOverdue ? <AlertTriangle size={24} /> : isQuickPay ? <Zap size={24} className="text-amber-300 fill-amber-300" /> : <PartyPopper size={24} />}
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                    isOverdue ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
+                    isOverdue 
+                      ? 'bg-rose-100 text-rose-800' 
+                      : isQuickPay
+                      ? 'bg-teal-100 text-teal-800'
+                      : 'bg-emerald-100 text-emerald-800'
                   }`}>
-                    {isOverdue ? 'Overdue Trigger' : 'Approval Trigger'}
+                    {isOverdue ? 'Overdue Trigger' : isQuickPay ? 'Quick Pay Active' : 'Approval Trigger'}
                   </span>
                   <span className="text-[10px] font-mono text-gray-400">
                     {notification.loanId}
                   </span>
                 </div>
                 <h3 className="text-base sm:text-lg font-black text-gray-900 uppercase tracking-tight font-heading mt-0.5">
-                  {isOverdue ? 'Automated Overdue Reminder' : 'Automated Approval Notice'}
+                  {isOverdue ? 'Automated Overdue Reminder' : isQuickPay ? 'Quick Pay WhatsApp Transfer' : 'Automated Approval Notice'}
                 </h3>
               </div>
             </div>

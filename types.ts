@@ -48,6 +48,7 @@ export interface UserSettings {
   smsStatusUpdates: boolean;
   emailStatusUpdates: boolean;
   lenderPhoto?: string;
+  lenderPhone?: string;
 }
 
 export interface LoanTemplate {
@@ -122,7 +123,7 @@ export interface ChatMessage {
   text: string;
 }
 
-export type WhatsAppNotificationType = 'overdue_reminder' | 'application_approved';
+export type WhatsAppNotificationType = 'overdue_reminder' | 'application_approved' | 'quick_pay';
 
 export interface WhatsAppNotification {
   id: string;

@@ -17,7 +17,8 @@ import {
   Percent,
   Banknote,
   UserPlus,
-  LogIn
+  LogIn,
+  Lightbulb
 } from 'lucide-react';
 import { BorrowerProfile } from '../types';
 import { DeviceSessionInfo } from '../services/deviceDetectionService';
@@ -32,6 +33,7 @@ interface DeviceOnboardingViewProps {
   onOpenLenderAuth: () => void;
   onCapturePhoto?: () => void;
   capturedPhoto?: string;
+  onOpenTipsModal?: () => void;
 }
 
 export const DeviceOnboardingView: React.FC<DeviceOnboardingViewProps> = ({
@@ -43,7 +45,8 @@ export const DeviceOnboardingView: React.FC<DeviceOnboardingViewProps> = ({
   onOpenApply,
   onOpenLenderAuth,
   onCapturePhoto,
-  capturedPhoto
+  capturedPhoto,
+  onOpenTipsModal
 }) => {
   const [activeMode, setActiveMode] = useState<'welcome' | 'login' | 'register'>('welcome');
   const [loginId, setLoginId] = useState('');
@@ -105,8 +108,20 @@ export const DeviceOnboardingView: React.FC<DeviceOnboardingViewProps> = ({
           </div>
         </div>
 
-        {/* Device Detection Pill */}
+        {/* Device Detection Pill & Tips */}
         <div className="flex items-center gap-2">
+          {onOpenTipsModal && (
+            <button
+              type="button"
+              onClick={onOpenTipsModal}
+              className="p-2 sm:px-3 sm:py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-colors border border-amber-200 shadow-xs"
+              title="Enjoy these tips while you wait"
+            >
+              <Lightbulb size={13} className="text-amber-600 animate-pulse" />
+              <span className="hidden sm:inline">Tips While You Wait</span>
+            </button>
+          )}
+
           <div className="bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-sm flex items-center gap-2 text-xs">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="font-bold text-gray-700 text-[11px]">
@@ -248,6 +263,21 @@ export const DeviceOnboardingView: React.FC<DeviceOnboardingViewProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Quick Tips While You Wait Banner */}
+            {onOpenTipsModal && (
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={onOpenTipsModal}
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-amber-50 hover:bg-amber-100 border border-amber-200/80 text-amber-900 text-xs font-black tracking-wide shadow-xs active:scale-95 transition-all group"
+                >
+                  <Lightbulb size={16} className="text-amber-600 group-hover:rotate-12 transition-transform" />
+                  <span>Enjoy these tips while you wait — Vibe Coding & Lending Guide</span>
+                  <ArrowRight size={13} className="text-amber-600 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -298,38 +328,6 @@ export const DeviceOnboardingView: React.FC<DeviceOnboardingViewProps> = ({
                 <ArrowRight size={16} />
               </button>
             </form>
-
-            {/* Quick Demo Switchers for convenience */}
-            <div className="pt-4 border-t border-gray-100 space-y-2">
-              <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">
-                Sample Community Borrowers:
-              </span>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginId('9201010001081');
-                    onLogin('9201010001081');
-                  }}
-                  className="p-2.5 rounded-xl border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-left transition-all text-xs"
-                >
-                  <span className="block font-black text-gray-800">Ms S Nkila</span>
-                  <span className="text-[10px] text-gray-400 font-mono">9201010001081</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginId('9611200014087');
-                    onLogin('9611200014087');
-                  }}
-                  className="p-2.5 rounded-xl border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-left transition-all text-xs"
-                >
-                  <span className="block font-black text-gray-800">U Zokhela</span>
-                  <span className="text-[10px] text-gray-400 font-mono">9611200014087</span>
-                </button>
-              </div>
-            </div>
 
             <div className="flex items-center justify-between text-xs pt-2">
               <button

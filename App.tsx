@@ -13,6 +13,8 @@ import DeleteLoanModal from './components/DeleteLoanModal';
 import DataRecoveryModal from './components/DataRecoveryModal';
 import LoanEmiCalculatorModal from './components/LoanEmiCalculatorModal';
 import DeviceOnboardingView from './components/DeviceOnboardingView';
+import { LoanApprovalCelebration, triggerSubtleConfetti } from './components/LoanApprovalCelebration';
+import QuickPayFAB from './components/QuickPayFAB';
 import { 
   detectDeviceSession, 
   persistBorrowerLogin, 
@@ -24,6 +26,7 @@ import {
 } from './services/deviceDetectionService';
 import { WhatsAppNotificationModal } from './components/WhatsAppNotificationModal';
 import { WhatsAppAutomationHub } from './components/WhatsAppAutomationHub';
+import { BatchWhatsAppReminderModal } from './components/BatchWhatsAppReminderModal';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
@@ -46,7 +49,7 @@ import {
   Mail as MailIcon, Clock, LogIn, Star, ShieldAlert, UserPlus, Navigation, Check, 
   Building2, Briefcase, ArrowUpRight, CalendarClock, HelpCircle, MessageCircle, Copy, 
   Link as LinkIcon, ClipboardList, Camera, Sparkles, Filter, ArrowUpDown, UserCheck, FileText, CheckCheck,
-  Database, FolderSync, Edit3
+  Database, FolderSync, Edit3, CheckSquare, Square, MinusSquare, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { 
   DEFAULT_INTEREST_RATE, 
@@ -68,6 +71,7 @@ import {
   markLoanAsDeleted,
   getDeletedBorrowerIds,
   markBorrowerAsDeleted,
+  purgeBorrowerFromLocalStorage,
   purgeLoanFromLocalStorage
 } from './services/firestoreSync';
 import {
@@ -80,7 +84,9 @@ import {
   subscribeToNotifications,
   getLocalNotifications,
   buildOverdueMessage,
-  buildApprovalMessage
+  buildApprovalMessage,
+  buildQuickPayWhatsAppUrl,
+  buildQuickPayMessage
 } from './services/whatsappNotificationService';
 
 const LENDER_PASSWORD = 'imali-admin';
@@ -227,9 +233,24 @@ const App: React.FC = () => {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [celebrationLoan, setCelebrationLoan] = useState<Loan | null>(null);
   const [selectedBorrowerId, setSelectedBorrowerId] = useState<string | null>(null);
   const [isSendingNotifications, setIsSendingNotifications] = useState(false);
   const [isCloudConnected, setIsCloudConnected] = useState(false);
+
+  // Batch selection states for loans table
+  const [selectedLoanIds, setSelectedLoanIds] = useState<string[]>([]);
+  const [isSelectMultipleMode, setIsSelectMultipleMode] = useState<boolean>(false);
+  const [isBatchWhatsAppModalOpen, setIsBatchWhatsAppModalOpen] = useState<boolean>(false);
+
+  // Mobile collapsed card view states
+  const [expandedMobileLoanIds, setExpandedMobileLoanIds] = useState<string[]>([]);
+
+  const toggleExpandMobileLoan = (loanId: string) => {
+    setExpandedMobileLoanIds(prev => 
+      prev.includes(loanId) ? prev.filter(id => id !== loanId) : [...prev, loanId]
+    );
+  };
 
   // Initialize and subscribe to Firestore for real-time cross-device updates
   useEffect(() => {
@@ -373,24 +394,11 @@ const App: React.FC = () => {
   const t = TRANSLATIONS[language];
 
   useEffect(() => {
-    if ("geolocation" in navigator && loggedInBorrowerId) {
-      setIsLocating(true);
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords;
-          try {
-            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`);
-            const data = await response.json();
-            const city = data.address.city || data.address.town || data.address.village || data.address.suburb || data.address.county;
-            if (city) setDetectedCity(city);
-          } catch (err) { console.error(err); }
-          setIsLocating(false);
-        },
-        () => setIsLocating(false),
-        { timeout: 10000 }
-      );
+    // Avoid triggering automated device permission access prompts
+    if (!detectedCity) {
+      setDetectedCity('East London, EC');
     }
-  }, [loggedInBorrowerId]);
+  }, [detectedCity]);
 
   const calculatePenaltyDetails = (loan: Loan) => {
     if (loan.status !== RepaymentStatus.OVERDUE) return { penalty: 0, weeks: 0 };
@@ -803,6 +811,20 @@ const App: React.FC = () => {
       return l;
     }));
 
+    if (selectedLoan && selectedLoan.id === loanId) {
+      setSelectedLoan(prev => prev ? { ...prev, applicationStatus: newStatus } : null);
+    }
+
+    // Celebration milestone animation & subtle confetti when loan is approved
+    if (newStatus === ApplicationStatus.APPROVED) {
+      const target = approvedLoanTarget || loans.find(l => l.id === loanId);
+      if (target) {
+        const approvedPayload: Loan = { ...target, applicationStatus: ApplicationStatus.APPROVED };
+        setCelebrationLoan(approvedPayload);
+        triggerSubtleConfetti();
+      }
+    }
+
     // Automated WhatsApp Trigger when loan application is approved
     if (newStatus === ApplicationStatus.APPROVED && settings.whatsappAutomation !== false && settings.whatsappAutoApproval !== false) {
       const target = approvedLoanTarget || loans.find(l => l.id === loanId);
@@ -896,11 +918,20 @@ const App: React.FC = () => {
   };
 
   const handleSaveEditedLoan = async (updatedLoan: Loan) => {
+    const prevLoan = loans.find(l => l.id === updatedLoan.id);
+    const wasJustApproved = prevLoan && prevLoan.applicationStatus !== ApplicationStatus.APPROVED && updatedLoan.applicationStatus === ApplicationStatus.APPROVED;
+
     setLoans(prev => prev.map(l => l.id === updatedLoan.id ? updatedLoan : l));
     if (selectedLoan && selectedLoan.id === updatedLoan.id) {
       setSelectedLoan(updatedLoan);
     }
     setLoanToEdit(null);
+
+    if (wasJustApproved) {
+      setCelebrationLoan(updatedLoan);
+      triggerSubtleConfetti();
+    }
+
     try {
       await saveLoanToFirestore(updatedLoan);
     } catch (err) {
@@ -1013,6 +1044,97 @@ const App: React.FC = () => {
       `Molo ${loan.borrowerName}, this is a payment notification regarding your imali commitment (${loan.id}). Total amount due: R${total.toLocaleString()}${penalty > 0 ? ` (includes R${penalty} overdue penalty)` : ''} by ${loan.dueDate}. Siyabonga!`
     );
     return `https://wa.me/${formattedPhone}?text=${msg}`;
+  };
+
+  const handleQuickPay = (loan: Loan) => {
+    const penaltyInfo = calculatePenaltyDetails(loan);
+    const totalDue = loan.totalRepayment + penaltyInfo.penalty;
+    const recipientPhone = userRole === UserRole.BORROWER 
+      ? (settings.lenderPhone || '0730713439') 
+      : loan.borrowerNumber;
+
+    const waUrl = buildQuickPayWhatsAppUrl(loan, recipientPhone);
+
+    dispatchAutomatedNotification(
+      loan,
+      'quick_pay',
+      `Quick Pay initiated for commitment ${loan.id} (${loan.borrowerName})`,
+      true,
+      recipientPhone
+    ).then(notif => {
+      if (notif) {
+        setActiveWhatsAppNotification(notif);
+      }
+    });
+
+    try {
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      console.warn('Popup blocked, modal fallback available:', e);
+    }
+    setShowToast(`Opening WhatsApp Quick Pay for loan ${loan.id} (R ${totalDue.toLocaleString()})...`);
+    setTimeout(() => setShowToast(null), 3500);
+  };
+
+  const selectedLoans = useMemo(() => {
+    return loans.filter(l => selectedLoanIds.includes(l.id));
+  }, [loans, selectedLoanIds]);
+
+  const toggleSelectLoan = (loanId: string) => {
+    setSelectedLoanIds(prev => 
+      prev.includes(loanId) ? prev.filter(id => id !== loanId) : [...prev, loanId]
+    );
+  };
+
+  const handleToggleSelectAll = () => {
+    const visibleIds = filteredAndSortedLoans.map(l => l.id);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedLoanIds.includes(id));
+    if (allVisibleSelected) {
+      setSelectedLoanIds(prev => prev.filter(id => !visibleIds.includes(id)));
+    } else {
+      setSelectedLoanIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedLoanIds([]);
+  };
+
+  const handleBatchMarkAsPaid = () => {
+    if (selectedLoanIds.length === 0) return;
+    const targets = loans.filter(l => selectedLoanIds.includes(l.id));
+    const activeTargets = targets.filter(l => l.status !== RepaymentStatus.PAID);
+
+    if (activeTargets.length === 0) {
+      setShowToast("All selected commitment(s) are already marked as Paid.");
+      setTimeout(() => setShowToast(null), 3000);
+      return;
+    }
+
+    setLoans(prev => prev.map(l => {
+      if (selectedLoanIds.includes(l.id) && l.status !== RepaymentStatus.PAID) {
+        const pen = calculatePenaltyDetails(l).penalty;
+        const updated: Loan = { 
+          ...l, 
+          status: RepaymentStatus.PAID, 
+          history: [
+            ...l.history, 
+            { 
+              date: new Date().toISOString().split('T')[0], 
+              action: 'Full Repayment Received (Batch Mark as Paid)', 
+              amount: l.totalRepayment + pen 
+            }
+          ] 
+        };
+        saveLoanToFirestore(updated).catch(err => console.warn('Cloud batch payment sync deferred:', err));
+        return updated;
+      }
+      return l;
+    }));
+
+    setShowToast(`Successfully marked ${activeTargets.length} commitment(s) as Paid and synced to cloud!`);
+    setTimeout(() => setShowToast(null), 3500);
+    setSelectedLoanIds([]);
   };
 
   const filteredAndSortedLoans = useMemo(() => {
@@ -1386,7 +1508,7 @@ const App: React.FC = () => {
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-5">
+                <div className={`w-full grid grid-cols-2 ${userRole === UserRole.LENDER ? 'md:grid-cols-3 lg:grid-cols-5' : 'md:grid-cols-4 lg:grid-cols-4'} gap-3 sm:gap-5`}>
                   <SummaryCard title="Total Loaned" value={`R ${stats.totalLoaned.toLocaleString()}`} icon={Wallet} colorClass="bg-indigo-50 text-indigo-600" />
                   <SummaryCard title="Repayment Rate" value={`${stats.repaymentRate.toFixed(1)}%`} icon={TrendingUp} colorClass="bg-emerald-50 text-emerald-600" />
                   <SummaryCard title="Overdue Loans" value={stats.overdueCount} icon={AlertCircle} colorClass="bg-rose-50 text-rose-600" isUrgent={stats.overdueCount > 0} action={userRole === UserRole.LENDER && stats.overdueCount > 0 ? handleSendNotifications : null} />
@@ -1463,6 +1585,159 @@ const App: React.FC = () => {
                   />
                   </div>
                 )}
+
+                {/* Active Loan Cards on Dashboard View with Quick Pay Floating Action Button */}
+                {(() => {
+                  const dashboardLoans = (userRole === UserRole.BORROWER && currentBorrowerAccount
+                    ? loans.filter(l => l.idNumber === currentBorrowerAccount.idNumber)
+                    : loans
+                  ).filter(l => l.status !== RepaymentStatus.PAID);
+
+                  if (dashboardLoans.length === 0) return null;
+
+                  return (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-base sm:text-lg font-black uppercase tracking-tight font-heading flex items-center gap-2">
+                              <ReceiptText size={18} className="text-indigo-600" />
+                              <span>{userRole === UserRole.BORROWER ? 'Your Active Commitments' : 'Active Loan Commitments'}</span>
+                            </h3>
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              {dashboardLoans.length} Active
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 font-medium mt-0.5">
+                            {userRole === UserRole.BORROWER 
+                              ? 'Tap Quick Pay on any commitment to instantly initiate payment details via WhatsApp.' 
+                              : 'Live borrower commitments with instant Quick Pay WhatsApp initiation.'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('loans')}
+                          className="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95 shrink-0"
+                        >
+                          <span>View Ledger</span>
+                          <ArrowRight size={13} />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                        {dashboardLoans.slice(0, 6).map(loan => {
+                          const penaltyInfo = calculatePenaltyDetails(loan);
+                          const totalDue = loan.totalRepayment + penaltyInfo.penalty;
+                          const isOverdue = loan.status === RepaymentStatus.OVERDUE || new Date(loan.dueDate) < new Date();
+
+                          return (
+                            <div
+                              key={`dash_loan_${loan.id}`}
+                              onClick={() => setSelectedLoan(loan)}
+                              className="relative group bg-white rounded-3xl sm:rounded-[32px] p-5 sm:p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-indigo-100 transition-all duration-300 flex flex-col justify-between overflow-hidden cursor-pointer"
+                            >
+                              {/* Background subtle watermark & decorative glow */}
+                              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-50/50 to-emerald-50/30 rounded-bl-full pointer-events-none -z-0 opacity-60 group-hover:scale-110 transition-transform" />
+
+                              {/* Floating Quick Pay Action Button at Top-Right of Card */}
+                              <div className="absolute top-4 right-4 z-20">
+                                <QuickPayFAB 
+                                  loan={loan} 
+                                  onQuickPay={handleQuickPay} 
+                                  variant="compact" 
+                                />
+                              </div>
+
+                              <div>
+                                {/* Top row: Ref badge, Profile & Status */}
+                                <div className="flex items-start justify-between gap-3 mb-3 relative z-10 pr-28">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-black text-sm shrink-0 overflow-hidden shadow-inner">
+                                      {loan.profilePhoto ? (
+                                        <img src={loan.profilePhoto} alt={loan.borrowerName} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <span>{loan.borrowerName ? loan.borrowerName[0] : 'B'}</span>
+                                      )}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="bg-indigo-600 text-white font-mono px-2 py-0.5 rounded-md text-[10px] font-black shadow-xs">
+                                          {loan.id}
+                                        </span>
+                                        <span className="text-xs font-black text-gray-900 uppercase truncate font-heading">
+                                          {loan.borrowerName}
+                                        </span>
+                                      </div>
+                                      <p className="text-[10px] font-mono text-gray-400 mt-0.5 truncate">
+                                        ID: {loan.idNumber}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="mb-3 relative z-10">
+                                  <StatusDot status={loan.status} showLabel hasPenalty={penaltyInfo.penalty > 0} />
+                                </div>
+
+                                {/* Financial Details Block */}
+                                <div className="grid grid-cols-2 gap-2.5 bg-gray-50/80 p-3.5 rounded-2xl border border-gray-100/80 relative z-10">
+                                  <div>
+                                    <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider block">Principal</span>
+                                    <span className="text-sm font-black text-gray-900 font-mono">
+                                      R {loan.amountLoaned.toLocaleString()}
+                                    </span>
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="text-[9px] font-black uppercase text-indigo-500 tracking-wider block">Total Due</span>
+                                    <span className={`text-base font-black font-mono ${isOverdue ? 'text-rose-600' : 'text-indigo-600'}`}>
+                                      R {totalDue.toLocaleString()}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {penaltyInfo.penalty > 0 && (
+                                  <div className="mt-2.5 bg-rose-50 text-rose-700 border border-rose-200/70 px-3 py-1.5 rounded-xl flex items-center justify-between text-[11px] font-bold relative z-10">
+                                    <span className="flex items-center gap-1">
+                                      <AlertTriangle size={12} /> {penaltyInfo.weeks} week(s) late
+                                    </span>
+                                    <span className="font-black">+R {penaltyInfo.penalty} penalty</span>
+                                  </div>
+                                )}
+
+                                <div className="mt-3 flex items-center justify-between text-xs text-gray-500 relative z-10">
+                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                    <Calendar size={12} /> Due Date
+                                  </span>
+                                  <span className="font-bold text-gray-700 font-mono">{loan.dueDate}</span>
+                                </div>
+                              </div>
+
+                              {/* Bottom row: Card Actions & floating Quick Pay button */}
+                              <div className="mt-4 pt-3 border-t border-gray-100/90 flex items-center justify-between gap-2 relative z-10">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedLoan(loan);
+                                  }}
+                                  className="py-2 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 active:scale-95 transition-all"
+                                >
+                                  <Eye size={13} /> Details
+                                </button>
+
+                                <QuickPayFAB 
+                                  loan={loan} 
+                                  onQuickPay={handleQuickPay} 
+                                  variant="floating" 
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="bg-white p-5 sm:p-8 rounded-[2rem] sm:rounded-[40px] border border-gray-100 shadow-sm h-[280px] sm:h-[350px]">
                   <div className="flex items-center justify-between mb-4 sm:mb-6">
@@ -1808,12 +2083,38 @@ const App: React.FC = () => {
                       )}
                     </div>
                     {userRole === UserRole.LENDER && (
-                      <button 
-                        onClick={() => setIsAddModalOpen(true)} 
-                        className="bg-gray-900 hover:bg-indigo-600 text-white px-5 sm:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all min-h-[44px]"
-                      >
-                        <Plus size={18} /> Issue Commitment
-                      </button>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedLoanIds.length > 0) {
+                              clearSelection();
+                            } else {
+                              handleToggleSelectAll();
+                            }
+                          }}
+                          className={`px-4 py-3 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 border transition-all min-h-[44px] active:scale-95 ${
+                            selectedLoanIds.length > 0
+                              ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-xs'
+                              : 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'
+                          }`}
+                          title="Select multiple loans to perform batch actions"
+                        >
+                          <CheckSquare size={16} />
+                          <span>
+                            {selectedLoanIds.length > 0 
+                              ? `Selected (${selectedLoanIds.length})` 
+                              : 'Select Multiple'}
+                          </span>
+                        </button>
+
+                        <button 
+                          onClick={() => setIsAddModalOpen(true)} 
+                          className="bg-gray-900 hover:bg-indigo-600 text-white px-5 sm:px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all min-h-[44px]"
+                        >
+                          <Plus size={18} /> Issue Commitment
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -1857,119 +2158,293 @@ const App: React.FC = () => {
                       </button>
                     ))}
                   </div>
+
+                  {/* Batch Selection Action Bar for Lenders */}
+                  {userRole === UserRole.LENDER && selectedLoanIds.length > 0 && (
+                    <div className="p-3.5 sm:p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl sm:rounded-3xl shadow-xl border border-indigo-500/30 flex flex-col md:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="flex items-center gap-3 w-full md:w-auto">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shrink-0 font-mono font-black text-sm shadow-inner">
+                          {selectedLoanIds.length}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-black font-heading tracking-tight">
+                              {selectedLoanIds.length} {selectedLoanIds.length === 1 ? 'Loan' : 'Loans'} Selected
+                            </span>
+                            <span className="text-indigo-400 text-xs hidden sm:inline">•</span>
+                            <span className="text-xs font-bold text-indigo-200 hidden sm:inline">
+                              Total Due: R {selectedLoans.reduce((sum, l) => sum + l.totalRepayment + calculatePenaltyDetails(l).penalty, 0).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-300">
+                            Apply bulk actions across all {selectedLoanIds.length} selected borrower record{selectedLoanIds.length === 1 ? '' : 's'}.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 w-full md:w-auto flex-wrap justify-end">
+                        <button
+                          type="button"
+                          onClick={handleBatchMarkAsPaid}
+                          className="flex-1 sm:flex-none px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all min-h-[38px]"
+                          title="Mark all selected loans as Paid"
+                        >
+                          <Check size={16} />
+                          <span>Mark as Paid ({selectedLoanIds.length})</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsBatchWhatsAppModalOpen(true)}
+                          className="flex-1 sm:flex-none px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all min-h-[38px]"
+                          title="Open batch WhatsApp reminders modal"
+                        >
+                          <Smartphone size={16} />
+                          <span>Send WhatsApp Reminder ({selectedLoanIds.length})</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleToggleSelectAll}
+                          className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all active:scale-95 min-h-[38px]"
+                          title={
+                            filteredAndSortedLoans.length > 0 && filteredAndSortedLoans.every(l => selectedLoanIds.includes(l.id))
+                              ? "Deselect All Visible"
+                              : "Select All Visible"
+                          }
+                        >
+                          {filteredAndSortedLoans.length > 0 && filteredAndSortedLoans.every(l => selectedLoanIds.includes(l.id)) ? 'Deselect All' : 'Select All Visible'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={clearSelection}
+                          className="p-2 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-xl transition-all active:scale-95 min-h-[38px] flex items-center justify-center"
+                          title="Clear selection"
+                          aria-label="Clear selection"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Mobile Card Stack View (< md) */}
+                {/* Mobile Card Stack View (< md) - Compact Collapsible Cards */}
                 <div className="block md:hidden divide-y divide-gray-100">
                   {filteredAndSortedLoans.length === 0 ? (
                     <div className="p-8 text-center text-gray-400 font-medium text-sm">
                       No commitments matching your search criteria.
                     </div>
                   ) : (
-                    filteredAndSortedLoans.map(loan => {
-                      const penaltyInfo = calculatePenaltyDetails(loan);
-                      const totalDue = loan.totalRepayment + penaltyInfo.penalty;
-                      const isOverdue = loan.status === RepaymentStatus.OVERDUE;
-                      const isPaid = loan.status === RepaymentStatus.PAID;
-                      const waUrl = getWhatsAppLoanReminderUrl(loan);
+                    <>
+                      {/* Mobile Compact Feed Controls */}
+                      <div className="px-4 py-2 bg-gray-50/80 flex items-center justify-between text-[11px] text-gray-500 font-medium border-b border-gray-100">
+                        <span className="font-semibold">Showing {filteredAndSortedLoans.length} commitments</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (expandedMobileLoanIds.length === filteredAndSortedLoans.length) {
+                              setExpandedMobileLoanIds([]);
+                            } else {
+                              setExpandedMobileLoanIds(filteredAndSortedLoans.map(l => l.id));
+                            }
+                          }}
+                          className="font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-wider text-[10px] flex items-center gap-1 active:scale-95 transition-all"
+                        >
+                          {expandedMobileLoanIds.length === filteredAndSortedLoans.length ? (
+                            <><span>Collapse All</span> <ChevronUp size={12} /></>
+                          ) : (
+                            <><span>Expand All</span> <ChevronDown size={12} /></>
+                          )}
+                        </button>
+                      </div>
 
-                      return (
-                        <div key={loan.id} className="p-4 space-y-3 hover:bg-gray-50/50 transition-colors">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-black text-sm shrink-0 overflow-hidden">
-                                {loan.profilePhoto ? (
-                                  <img src={loan.profilePhoto} alt={loan.borrowerName} className="w-full h-full object-cover" />
-                                ) : (
-                                  <span>{loan.borrowerName ? loan.borrowerName[0] : 'B'}</span>
+                      {filteredAndSortedLoans.map(loan => {
+                        const penaltyInfo = calculatePenaltyDetails(loan);
+                        const totalDue = loan.totalRepayment + penaltyInfo.penalty;
+                        const isOverdue = loan.status === RepaymentStatus.OVERDUE || new Date(loan.dueDate) < new Date();
+                        const isPaid = loan.status === RepaymentStatus.PAID;
+                        const waUrl = getWhatsAppLoanReminderUrl(loan);
+                        const isSelected = selectedLoanIds.includes(loan.id);
+                        const isExpanded = expandedMobileLoanIds.includes(loan.id);
+
+                        return (
+                          <div 
+                            key={loan.id} 
+                            className={`p-3.5 sm:p-4 transition-colors ${
+                              isSelected 
+                                ? 'bg-indigo-50/40 border-l-4 border-indigo-600' 
+                                : isExpanded
+                                ? 'bg-gray-50/40'
+                                : 'hover:bg-gray-50/50'
+                            }`}
+                          >
+                            {/* Essential Information Row (Compact View) */}
+                            <div className="flex items-center justify-between gap-2.5">
+                              {/* Left: Select checkbox & ID + Borrower */}
+                              <div className="flex items-center gap-2 min-w-0">
+                                {userRole === UserRole.LENDER && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleSelectLoan(loan.id);
+                                    }}
+                                    className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-gray-400 hover:text-indigo-600 transition-colors"
+                                    aria-label={`Select loan ${loan.id}`}
+                                  >
+                                    {isSelected ? (
+                                      <CheckSquare size={18} className="text-indigo-600" />
+                                    ) : (
+                                      <Square size={18} className="text-gray-300" />
+                                    )}
+                                  </button>
                                 )}
-                              </div>
-                              <div className="min-w-0">
-                                <h4 className="font-black text-gray-900 text-sm uppercase tracking-tight truncate font-heading">{loan.borrowerName}</h4>
-                                <div className="flex items-center gap-1.5 text-[11px] text-gray-500 font-medium">
-                                  <span className="bg-indigo-600 text-white font-mono px-1.5 py-0.2 rounded text-[9px] font-black">{loan.id}</span>
-                                  <span>•</span>
-                                  <span className="truncate font-mono">{loan.idNumber}</span>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="bg-indigo-600 text-white font-mono px-1.5 py-0.5 rounded text-[10px] font-black shrink-0 shadow-2xs">
+                                      {loan.id}
+                                    </span>
+                                    <h4 className="font-black text-gray-900 text-xs sm:text-sm uppercase tracking-tight truncate font-heading">
+                                      {loan.borrowerName}
+                                    </h4>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                            <div className="shrink-0">
-                              <StatusDot status={loan.status} showLabel hasPenalty={penaltyInfo.penalty > 0} />
-                            </div>
-                          </div>
 
-                          <div className="grid grid-cols-3 gap-2 bg-gray-50/80 p-3 rounded-2xl text-center">
-                            <div>
-                              <p className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Principal</p>
-                              <p className="text-xs font-black text-gray-900 mt-0.5 tabular-nums">R {loan.amountLoaned.toLocaleString()}</p>
-                            </div>
-                            <div>
-                              <p className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Total Due</p>
-                              <p className={`text-xs font-black mt-0.5 tabular-nums ${isOverdue ? 'text-rose-600' : 'text-indigo-600'}`}>
-                                R {totalDue.toLocaleString()}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Due Date</p>
-                              <p className="text-xs font-bold text-gray-700 mt-0.5 truncate">{loan.dueDate}</p>
-                            </div>
-                          </div>
+                              {/* Center/Right: Total Due & Status & Expand Button */}
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className="text-right">
+                                  <span className="text-[9px] uppercase font-bold text-gray-400 block tracking-tight">Total Due</span>
+                                  <span className={`text-xs font-black font-mono tabular-nums ${isOverdue ? 'text-rose-600' : 'text-indigo-600'}`}>
+                                    R {totalDue.toLocaleString()}
+                                  </span>
+                                </div>
 
-                          {penaltyInfo.penalty > 0 && (
-                            <div className="bg-rose-50 text-rose-700 border border-rose-100 px-3 py-1.5 rounded-xl flex items-center justify-between text-xs font-bold">
-                              <span className="flex items-center gap-1"><AlertTriangle size={13} /> {penaltyInfo.weeks} wk(s) overdue</span>
-                              <span className="font-black">+R {penaltyInfo.penalty} penalty</span>
-                            </div>
-                          )}
+                                <div className="shrink-0">
+                                  <StatusDot status={loan.status} showLabel={false} hasPenalty={penaltyInfo.penalty > 0} />
+                                </div>
 
-                          <div className="flex items-center gap-1.5 pt-1 flex-wrap">
-                            <button
-                              onClick={() => setSelectedLoan(loan)}
-                              className="flex-1 min-h-[38px] py-2 px-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1 active:scale-95 transition-all"
-                            >
-                              <Eye size={13} /> Details
-                            </button>
-                            {(userRole === UserRole.LENDER || (userRole === UserRole.BORROWER && (loan.applicationStatus === ApplicationStatus.SUBMITTED || loan.applicationStatus === ApplicationStatus.REVIEWING))) && (
-                              <button
-                                onClick={() => setLoanToEdit(loan)}
-                                className="min-h-[38px] py-2 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1 active:scale-95 transition-all"
-                                title="Edit Loan Record"
-                              >
-                                <Edit3 size={13} /> Edit
-                              </button>
-                            )}
-                            {userRole === UserRole.LENDER && !isPaid && (
-                              <button
-                                onClick={() => handleMarkAsPaid(loan.id)}
-                                className="flex-1 min-h-[38px] py-2 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-all"
-                              >
-                                <Check size={13} /> Paid
-                              </button>
-                            )}
-                            {(userRole === UserRole.LENDER || (userRole === UserRole.BORROWER && (loan.applicationStatus === ApplicationStatus.SUBMITTED || loan.applicationStatus === ApplicationStatus.REVIEWING))) && (
-                              <button
-                                onClick={() => setLoanToDelete(loan)}
-                                className="min-h-[38px] p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center active:scale-95 transition-all"
-                                title="Delete Loan Record"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            )}
-                            {userRole === UserRole.LENDER && waUrl && (
-                              <a
-                                href={waUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="min-h-[38px] w-9 flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl border border-emerald-200 active:scale-95 transition-all shrink-0"
-                                title="Send WhatsApp Reminder"
-                              >
-                                <Smartphone size={14} />
-                              </a>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandMobileLoan(loan.id)}
+                                  className={`px-2.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95 ${
+                                    isExpanded 
+                                      ? 'bg-indigo-600 text-white shadow-xs' 
+                                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                                  }`}
+                                  title={isExpanded ? "Collapse details" : "Expand loan details"}
+                                  aria-expanded={isExpanded}
+                                >
+                                  <span>{isExpanded ? 'Collapse' : 'Expand'}</span>
+                                  {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Collapsible Detailed View */}
+                            {isExpanded && (
+                              <div className="pt-3 mt-3 border-t border-gray-100 space-y-3 animate-in fade-in duration-150">
+                                {/* Secondary essential info */}
+                                <div className="grid grid-cols-3 gap-2 bg-gray-50/90 p-2.5 rounded-2xl text-center">
+                                  <div>
+                                    <p className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Principal</p>
+                                    <p className="text-xs font-black text-gray-900 mt-0.5 tabular-nums">
+                                      R {loan.amountLoaned.toLocaleString()}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[9px] uppercase font-black text-gray-400 tracking-wider">Due Date</p>
+                                    <p className="text-xs font-bold text-gray-700 mt-0.5 truncate">
+                                      {loan.dueDate}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[9px] uppercase font-black text-gray-400 tracking-wider">ID Number</p>
+                                    <p className="text-[10px] font-mono font-bold text-gray-600 mt-0.5 truncate">
+                                      {loan.idNumber}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {penaltyInfo.penalty > 0 && (
+                                  <div className="bg-rose-50 text-rose-700 border border-rose-100 px-3 py-1.5 rounded-xl flex items-center justify-between text-xs font-bold">
+                                    <span className="flex items-center gap-1">
+                                      <AlertTriangle size={13} /> {penaltyInfo.weeks} wk(s) overdue
+                                    </span>
+                                    <span className="font-black">+R {penaltyInfo.penalty} penalty</span>
+                                  </div>
+                                )}
+
+                                {/* Action Buttons */}
+                                <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
+                                  <button
+                                    onClick={() => setSelectedLoan(loan)}
+                                    className="flex-1 min-h-[36px] py-2 px-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1 active:scale-95 transition-all"
+                                  >
+                                    <Eye size={13} /> Details
+                                  </button>
+                                  {loan.status !== RepaymentStatus.PAID && (
+                                    <QuickPayFAB 
+                                      loan={loan} 
+                                      onQuickPay={handleQuickPay} 
+                                      variant="compact" 
+                                    />
+                                  )}
+                                  {userRole === UserRole.LENDER && loan.applicationStatus !== ApplicationStatus.APPROVED && (
+                                    <button
+                                      onClick={() => handleUpdateAppStatus(loan.id, ApplicationStatus.APPROVED)}
+                                      className="min-h-[36px] py-2 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-all"
+                                      title="Approve Loan Application"
+                                    >
+                                      <ShieldCheck size={13} /> Approve
+                                    </button>
+                                  )}
+                                  {(userRole === UserRole.LENDER || (userRole === UserRole.BORROWER && (loan.applicationStatus === ApplicationStatus.SUBMITTED || loan.applicationStatus === ApplicationStatus.REVIEWING))) && (
+                                    <button
+                                      onClick={() => setLoanToEdit(loan)}
+                                      className="min-h-[36px] py-2 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1 active:scale-95 transition-all"
+                                      title="Edit Loan Record"
+                                    >
+                                      <Edit3 size={13} /> Edit
+                                    </button>
+                                  )}
+                                  {userRole === UserRole.LENDER && !isPaid && (
+                                    <button
+                                      onClick={() => handleMarkAsPaid(loan.id)}
+                                      className="flex-1 min-h-[36px] py-2 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-all"
+                                    >
+                                      <Check size={13} /> Paid
+                                    </button>
+                                  )}
+                                  {(userRole === UserRole.LENDER || (userRole === UserRole.BORROWER && (loan.applicationStatus === ApplicationStatus.SUBMITTED || loan.applicationStatus === ApplicationStatus.REVIEWING))) && (
+                                    <button
+                                      onClick={() => setLoanToDelete(loan)}
+                                      className="min-h-[36px] p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center active:scale-95 transition-all"
+                                      title="Delete Loan Record"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                  {userRole === UserRole.LENDER && waUrl && (
+                                    <a
+                                      href={waUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="min-h-[36px] w-9 flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl border border-emerald-200 active:scale-95 transition-all shrink-0"
+                                      title="Send WhatsApp Reminder"
+                                    >
+                                      <Smartphone size={14} />
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
                             )}
                           </div>
-                        </div>
-                      );
-                    })
+                        );
+                      })}
+                    </>
                   )}
                 </div>
 
@@ -1978,6 +2453,29 @@ const App: React.FC = () => {
                   <table className="w-full text-left">
                     <thead className="bg-gray-50/60 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b">
                       <tr>
+                        {userRole === UserRole.LENDER && (
+                          <th className="px-4 py-5 w-12 text-center">
+                            <button
+                              type="button"
+                              onClick={handleToggleSelectAll}
+                              className="w-5 h-5 rounded-md border border-gray-300 hover:border-indigo-600 bg-white flex items-center justify-center transition-all shadow-xs"
+                              title={
+                                filteredAndSortedLoans.length > 0 && filteredAndSortedLoans.every(l => selectedLoanIds.includes(l.id))
+                                  ? "Deselect All Visible"
+                                  : "Select All Visible"
+                              }
+                              aria-label="Toggle select all loans"
+                            >
+                              {filteredAndSortedLoans.length > 0 && filteredAndSortedLoans.every(l => selectedLoanIds.includes(l.id)) ? (
+                                <CheckSquare size={15} className="text-indigo-600" />
+                              ) : filteredAndSortedLoans.some(l => selectedLoanIds.includes(l.id)) ? (
+                                <MinusSquare size={15} className="text-indigo-600" />
+                              ) : (
+                                <Square size={15} className="text-gray-300 hover:text-gray-400" />
+                              )}
+                            </button>
+                          </th>
+                        )}
                         <th className="px-8 py-5">TXN ID</th>
                         <th className="px-8 py-5">Borrower</th>
                         <th className="px-8 py-5">Principal</th>
@@ -1990,7 +2488,7 @@ const App: React.FC = () => {
                     <tbody className="divide-y divide-gray-50">
                       {filteredAndSortedLoans.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="px-8 py-16 text-center text-gray-400 font-medium text-sm">
+                          <td colSpan={userRole === UserRole.LENDER ? 8 : 7} className="px-8 py-16 text-center text-gray-400 font-medium text-sm">
                             <div className="flex flex-col items-center justify-center gap-2">
                               <ReceiptText size={40} className="text-gray-300" />
                               <p className="font-black text-gray-700 uppercase text-xs tracking-wider">No Commitments Found</p>
@@ -2005,8 +2503,36 @@ const App: React.FC = () => {
                           const penalty = calculatePenaltyDetails(loan).penalty;
                           const totalDue = loan.totalRepayment + penalty;
                           const waUrl = getWhatsAppLoanReminderUrl(loan);
+                          const isSelected = selectedLoanIds.includes(loan.id);
+
                           return (
-                            <tr key={loan.id} className="hover:bg-gray-50/50 transition-all">
+                            <tr 
+                              key={loan.id} 
+                              className={`transition-all ${
+                                isSelected 
+                                  ? 'bg-indigo-50/40 hover:bg-indigo-50/60' 
+                                  : 'hover:bg-gray-50/50'
+                              }`}
+                            >
+                              {userRole === UserRole.LENDER && (
+                                <td className="px-4 py-6 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleSelectLoan(loan.id);
+                                    }}
+                                    className="w-5 h-5 rounded-md flex items-center justify-center transition-all"
+                                    aria-label={`Select loan ${loan.id}`}
+                                  >
+                                    {isSelected ? (
+                                      <CheckSquare size={17} className="text-indigo-600" />
+                                    ) : (
+                                      <Square size={17} className="text-gray-300 hover:text-gray-400" />
+                                    )}
+                                  </button>
+                                </td>
+                              )}
                               <td className="px-8 py-6">
                                 <div className="bg-indigo-600 text-white text-[10px] font-black px-2.5 py-1 rounded-md inline-block font-mono">
                                   {loan.id}
@@ -2045,6 +2571,22 @@ const App: React.FC = () => {
                                 >
                                   <Eye size={17} />
                                 </button>
+                                {loan.status !== RepaymentStatus.PAID && (
+                                  <QuickPayFAB 
+                                    loan={loan} 
+                                    onQuickPay={handleQuickPay} 
+                                    variant="compact" 
+                                  />
+                                )}
+                                {userRole === UserRole.LENDER && loan.applicationStatus !== ApplicationStatus.APPROVED && (
+                                  <button
+                                    onClick={() => handleUpdateAppStatus(loan.id, ApplicationStatus.APPROVED)}
+                                    className="p-2 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-all"
+                                    title="Approve Loan Application"
+                                  >
+                                    <ShieldCheck size={17} />
+                                  </button>
+                                )}
                                 {(userRole === UserRole.LENDER || (userRole === UserRole.BORROWER && (loan.applicationStatus === ApplicationStatus.SUBMITTED || loan.applicationStatus === ApplicationStatus.REVIEWING))) && (
                                   <button 
                                     onClick={() => setLoanToEdit(loan)} 
@@ -2395,6 +2937,14 @@ const App: React.FC = () => {
                   Close
                 </button>
 
+                {selectedLoan.status !== RepaymentStatus.PAID && (
+                  <QuickPayFAB 
+                    loan={selectedLoan} 
+                    onQuickPay={handleQuickPay} 
+                    variant="pill" 
+                  />
+                )}
+
                 {(userRole === UserRole.LENDER || (userRole === UserRole.BORROWER && (selectedLoan.applicationStatus === ApplicationStatus.SUBMITTED || selectedLoan.applicationStatus === ApplicationStatus.REVIEWING))) && (
                   <>
                     <button
@@ -2444,6 +2994,19 @@ const App: React.FC = () => {
                       </button>
                     )}
                   </>
+                )}
+
+                {userRole === UserRole.LENDER && selectedLoan.applicationStatus !== ApplicationStatus.APPROVED && (
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      handleUpdateAppStatus(selectedLoan.id, ApplicationStatus.APPROVED);
+                      setSelectedLoan(prev => prev ? { ...prev, applicationStatus: ApplicationStatus.APPROVED } : null);
+                    }} 
+                    className="w-full sm:w-auto px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition-all min-h-[44px] flex items-center justify-center gap-2"
+                  >
+                    <ShieldCheck size={16} /> Approve Loan
+                  </button>
                 )}
 
                 {userRole === UserRole.LENDER && selectedLoan.status !== RepaymentStatus.PAID && (
@@ -2801,6 +3364,14 @@ const App: React.FC = () => {
         }}
       />
 
+      {/* Batch WhatsApp Reminders Modal */}
+      <BatchWhatsAppReminderModal
+        isOpen={isBatchWhatsAppModalOpen}
+        onClose={() => setIsBatchWhatsAppModalOpen(false)}
+        selectedLoans={selectedLoans}
+        calculatePenaltyDetails={calculatePenaltyDetails}
+      />
+
       {/* Automated WhatsApp Trigger Notification Prompt Modal */}
       <WhatsAppNotificationModal
         notification={activeWhatsAppNotification}
@@ -2872,6 +3443,14 @@ const App: React.FC = () => {
           />
         )}
       </AnimatePresence>
+
+      {/* Subtle Confetti & Check Milestone Celebration when Lender Approves a Loan */}
+      {celebrationLoan && (
+        <LoanApprovalCelebration
+          loan={celebrationLoan}
+          onClose={() => setCelebrationLoan(null)}
+        />
+      )}
     </div>
   );
 };

@@ -42,6 +42,56 @@ button, a, [role="button"] {
   transition: all 0.15s ease-in-out;
 }
 
+/* Milestone Checkmark Animation */
+@keyframes checkmark-stroke {
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes checkmark-circle {
+  0% {
+    stroke-dashoffset: 160;
+    transform: rotate(-90deg);
+  }
+  100% {
+    stroke-dashoffset: 0;
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes pop-bounce {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-pop-bounce {
+  animation: pop-bounce 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-check-circle {
+  stroke-dasharray: 160;
+  stroke-dashoffset: 160;
+  animation: checkmark-circle 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.05s forwards;
+  transform-origin: center;
+}
+
+.animate-check-tick {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: checkmark-stroke 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.28s forwards;
+}
+
 .custom-range-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;

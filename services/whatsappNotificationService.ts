@@ -94,12 +94,54 @@ _Siyakuvuyisana nawe! Thank you for partnering with imali._`;
 };
 
 /**
+ * Generate a culturally respectful, pre-filled WhatsApp message for a borrower initiating Quick Pay.
+ */
+export const buildQuickPayMessage = (loan: Loan): string => {
+  const { penalty, weeks } = calculateOverduePenalty(loan);
+  const isOverdue = loan.status === RepaymentStatus.OVERDUE || new Date(loan.dueDate) < new Date();
+  const totalOutstanding = loan.totalRepayment + (isOverdue ? penalty : 0);
+
+  return `💳 *IMALI QUICK PAY: PAYMENT INITIATION*
+*Intlawulo Ekhawulezayo*
+
+Molo, I would like to make a payment for my imali loan commitment:
+
+📋 *Commitment Details:*
+• Loan Ref: *${loan.id}*
+• Borrower: *${loan.borrowerName}*
+• ID Number: ${loan.idNumber}
+• Principal: R ${loan.amountLoaned.toLocaleString()}
+• Base Repayment: R ${loan.totalRepayment.toLocaleString()}
+${penalty > 0 ? `• Overdue Penalty: R ${penalty.toLocaleString()} (${weeks} week(s) late)\n` : ''}• *Total Due to Settle: R ${totalOutstanding.toLocaleString()}*
+• Due Date: ${loan.dueDate}
+• Status: *${loan.status}*
+
+🏦 *Please confirm your payment instructions:*
+• Bank Account / Branch Code
+• Or Capitec Pay / Cellphone Banking reference
+• Cash or Mobile Money collection instructions
+
+I am ready to make payment now and will send the transfer receipt upon completion. Siyabonga!`;
+};
+
+/**
  * Build a standard WhatsApp Click-to-Chat URL.
  */
 export const buildWhatsAppUrl = (phone: string, message: string): string => {
   const formattedPhone = formatWhatsAppNumber(phone);
   const encodedText = encodeURIComponent(message);
-  return `https://wa.me/${formattedPhone}?text=${encodedText}`;
+  if (formattedPhone) {
+    return `https://wa.me/${formattedPhone}?text=${encodedText}`;
+  }
+  return `https://wa.me/?text=${encodedText}`;
+};
+
+/**
+ * Build a Quick Pay WhatsApp URL for a loan commitment.
+ */
+export const buildQuickPayWhatsAppUrl = (loan: Loan, targetPhone?: string): string => {
+  const message = buildQuickPayMessage(loan);
+  return buildWhatsAppUrl(targetPhone || loan.borrowerNumber || '', message);
 };
 
 /**
@@ -108,19 +150,22 @@ export const buildWhatsAppUrl = (phone: string, message: string): string => {
 export const createNotificationItem = (
   loan: Loan,
   type: WhatsAppNotificationType,
-  triggerReason: string
+  triggerReason: string,
+  targetPhone?: string
 ): WhatsAppNotification => {
   const message = type === 'overdue_reminder' 
     ? buildOverdueMessage(loan) 
+    : type === 'quick_pay'
+    ? buildQuickPayMessage(loan)
     : buildApprovalMessage(loan);
   
-  const waUrl = buildWhatsAppUrl(loan.borrowerNumber, message);
+  const waUrl = buildWhatsAppUrl(targetPhone || loan.borrowerNumber, message);
 
   return {
     id: `wa_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     loanId: loan.id,
     borrowerName: loan.borrowerName,
-    borrowerNumber: loan.borrowerNumber,
+    borrowerNumber: targetPhone || loan.borrowerNumber,
     type,
     triggerReason,
     message,
@@ -240,14 +285,15 @@ export const dispatchAutomatedNotification = async (
   loan: Loan,
   type: WhatsAppNotificationType,
   reason: string,
-  force: boolean = false
+  force: boolean = false,
+  targetPhone?: string
 ): Promise<WhatsAppNotification | null> => {
   if (!force && hasNotificationTriggeredRecently(loan.id, type)) {
     console.log(`Notification for loan ${loan.id} (${type}) skipped due to 24h deduplication.`);
     return null;
   }
 
-  const notification = createNotificationItem(loan, type, reason);
+  const notification = createNotificationItem(loan, type, reason, targetPhone);
   
   // Persist locally
   saveNotificationLocally(notification);

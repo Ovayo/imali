@@ -4,7 +4,7 @@ import {
   Building2, CreditCard, ShieldCheck, ShieldAlert, AlertCircle, 
   CheckCircle2, Clock, Calendar, Plus, FileText, DollarSign,
   TrendingUp, Copy, Check, Edit3, Trash2, Save, Star, History, ArrowRight,
-  UploadCloud, ExternalLink, CheckSquare, Square
+  UploadCloud, ExternalLink, CheckSquare, Square, Home
 } from 'lucide-react';
 import { BorrowerProfile, Loan, RepaymentStatus, ApplicationStatus, PayoutMethod } from '../types';
 import TrustScoreDisplay from './TrustScoreDisplay';
